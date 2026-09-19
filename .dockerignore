@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.vscode
+.idea
+tmp
+static/exports
+*.log

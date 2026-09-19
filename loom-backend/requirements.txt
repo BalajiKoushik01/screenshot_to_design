@@ -1,0 +1,28 @@
+# WeaveCore Pattern Extraction Engine v3 — Python dependencies
+# Install: pip install -r requirements.txt
+
+# Core CV + ML
+numpy
+opencv-python
+scikit-learn
+pillow
+
+# Web framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Async task queue
+celery
+redis
+
+# HTTP client (InpaintingService)
+httpx
+
+# Settings management
+pydantic-settings
+
+# ─── Optional: install for Real-ESRGAN + MobileSAM ONNX inference ─────────
+# Download model weights to app/services/weights/ separately.
+# onnxruntime>=1.16.0
+# onnxruntime-gpu>=1.16.0  # GPU variant (install one, not both)

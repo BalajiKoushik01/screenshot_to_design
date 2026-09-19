@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+loom-backend/venv/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Temporary / Scratch files
+tmp/
+temp/
+tmp*
+*.tmp
+*.log
+scratch/
+loom-backend/temp/
+loom-backend/tmp*
+loom-backend/tmp/
+
+# Exports & static generated files
+static/exports/*
+!static/exports/.gitkeep
+loom-backend/static/exports/*
+!loom-backend/static/exports/.gitkeep
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE / Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+loom-backend/frontend/node_modules/
+loom-backend/frontend/dist/
