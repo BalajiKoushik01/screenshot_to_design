@@ -301,6 +301,66 @@ def test_replicated_cad_draft_synthesis():
         print(f"✔ CAD Synthesis: Arrangement '{arr}' generated cleanly (fg_ratio={fg_ratio:.2%})")
 
 
+def test_discrete_cad_micro_weave_binder():
+    """Verify 1-bit discrete CAD punch card detection on high-frequency tabby binders."""
+    cad_ani_path = "../sample output/480 broket ani m2.bmp"
+    img = cv2.imread(cad_ani_path)
+    assert img is not None, f"Could not load {cad_ani_path}"
+
+    res = detect_repeat(img)
+    assert res.arrangement == "micro_weave_binder", f"Expected micro_weave_binder, got {res.arrangement}"
+    assert res.vector_x == 2, f"Expected vector_x=2, got {res.vector_x}"
+    assert res.vector_y == 2, f"Expected vector_y=2, got {res.vector_y}"
+    assert res.confidence == 1.0, f"Expected confidence 1.0, got {res.confidence}"
+    assert res.symmetry_group == "p4m", f"Expected p4m, got {res.symmetry_group}"
+    print(f"✔ Discrete CAD Tabby Binder: Detected 1-pixel micro-weave ({res.vector_x}x{res.vector_y}), conf={res.confidence:.2f}, sym={res.symmetry_group}")
+
+
+def test_discrete_cad_brocade_repeat_snapping():
+    """Verify exact integer divisor repeat snapping on discrete CAD brocade files."""
+    cad_jeri_path = "../sample output/480 broket jeri m3.bmp"
+    img = cv2.imread(cad_jeri_path)
+    assert img is not None, f"Could not load {cad_jeri_path}"
+
+    h, w = img.shape[:2]
+    res = detect_repeat(img)
+
+    # Must snap to exact integer divisor of 240 (Tx=20) and 480 (Ty=20)
+    assert res.vector_x == 20, f"Expected vector_x=20, got {res.vector_x}"
+    assert res.vector_y == 20, f"Expected vector_y=20, got {res.vector_y}"
+    assert w % res.vector_x == 0, f"Width {w} must be exact integer multiple of repeat {res.vector_x}"
+    assert h % res.vector_y == 0, f"Height {h} must be exact integer multiple of repeat {res.vector_y}"
+    assert res.half_drop_shift_x == 10, f"Expected half-drop shift=10, got {res.half_drop_shift_x}"
+    print(f"✔ Discrete CAD Brocade Snapping: Tx={res.vector_x}px, Ty={res.vector_y}px, shift_x={res.half_drop_shift_x}px (100% integer divisor match)")
+
+
+def test_seamless_replication_with_detected_lattice_parameters():
+    """Verify that synthesizing with detected lattice parameters preserves exact geometry and continuity."""
+    clean_motif = _create_synthetic_motif(30, 40)
+    ground = np.array([40, 30, 160], dtype=np.uint8)
+    zari = np.array([60, 200, 240], dtype=np.uint8)
+
+    # Test brick arrangement with Tx=40, Ty=80, shift_y=40
+    canvas, binary = synthesize_replicated_body_draft(
+        clean_motif=clean_motif,
+        cad_butta=clean_motif,
+        ground_bgr=ground,
+        zari_bgr=zari,
+        panel_w=240,
+        panel_h=480,
+        arrangement="brick",
+        period_x=40,
+        period_y=80,
+        brick_shift_y=40,
+        wrap_v=True,
+    )
+    assert canvas.shape == (480, 240, 3)
+    assert binary.shape == (480, 240)
+    # Check that exactly 6 repeats fit across width (240 / 40 = 6)
+    assert 240 % 40 == 0
+    print("✔ Seamless Replicated Body Draft: Exact 240x480 hooks/picks synthesized with detected Tx=40, Ty=80, sy=40")
+
+
 if __name__ == "__main__":
     test_lattice_straight_grid()
     test_lattice_half_drop()
@@ -310,6 +370,10 @@ if __name__ == "__main__":
     test_pattern_completion_lattice_fill()
     test_border_periodicity_and_tiling()
     test_replicated_cad_draft_synthesis()
+    test_discrete_cad_micro_weave_binder()
+    test_discrete_cad_brocade_repeat_snapping()
+    test_seamless_replication_with_detected_lattice_parameters()
     print("\n" + "=" * 60)
     print("ALL PATTERN RECOGNITION & REPLICATION TESTS PASSED!")
     print("=" * 60)
+

@@ -135,6 +135,25 @@ class DynamicTextileExtractor:
         # Fabric mask: candidate ROI excluding skin and pitch-dark background
         fabric_mask = candidate_roi & (~skin_mask) & (hsv[:, :, 2] > 50)
 
+        # Check for discrete CAD bitmap (<= 16 unique colors)
+        flat_px = image.reshape(-1, 3)
+        check_flat = flat_px[::max(1, len(flat_px) // 20000)]
+        u_colors, counts = np.unique(check_flat, axis=0, return_counts=True)
+        if len(u_colors) <= 16:
+            sorted_idx = np.argsort(-counts)
+            u_colors = u_colors[sorted_idx]
+            counts = counts[sorted_idx]
+            ground_bgr = u_colors[0].astype(np.uint8)
+            zari_bgr = ground_bgr
+            for c in u_colors:
+                if np.linalg.norm(c.astype(float) - ground_bgr.astype(float)) > 30:
+                    zari_bgr = c.astype(np.uint8)
+                    break
+            if np.array_equal(zari_bgr, ground_bgr) and len(u_colors) > 1:
+                zari_bgr = u_colors[1].astype(np.uint8)
+            fabric_mask = np.ones((h, w), dtype=bool)
+            return ground_bgr, zari_bgr, fabric_mask
+
         # Cluster fabric pixels to find true ground color
         fab_coords = np.where(fabric_mask)
         if len(fab_coords[0]) > 200:

@@ -155,13 +155,15 @@ def _stamp_motif(
     ph: int,
     zari_bgr: np.ndarray,
     flip_h: bool = False,
+    wrap_v: bool = False,
 ) -> None:
-    """Stamp a motif mask onto canvas and binary CAD matrix with seamless horizontal wrapping."""
+    """Stamp a motif mask onto canvas and binary CAD matrix with seamless horizontal and optional vertical wrapping."""
     stamped_mask = (cv2.flip(mask.astype(np.uint8), 1) > 0) if flip_h else mask
     y1 = cy - mh // 2
     x1 = cx - mw // 2
     for my in range(mh):
-        py = y1 + my
+        raw_py = y1 + my
+        py = (raw_py % ph) if wrap_v else raw_py
         if 0 <= py < ph:
             for mx in range(mw):
                 if stamped_mask[my, mx]:
@@ -179,6 +181,11 @@ def synthesize_replicated_body_draft(
     panel_h: int,
     arrangement: str = "half_drop",
     alternating_mirror: bool = False,
+    period_x: Optional[int] = None,
+    period_y: Optional[int] = None,
+    half_drop_shift_x: Optional[int] = None,
+    brick_shift_y: Optional[int] = None,
+    wrap_v: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Generate authentic repeating Jacquard body draft supporting multiple lattice arrangements."""
     body_canvas = np.zeros((panel_h, panel_w, 3), dtype=np.uint8)
@@ -201,9 +208,18 @@ def synthesize_replicated_body_draft(
         pat_mask = cv2.resize(pat_mask.astype(np.uint8) * 255, (target_motif_w, target_motif_h), interpolation=cv2.INTER_NEAREST) > 128
         motif_h, motif_w = target_motif_h, target_motif_w
 
-    nx = max(1, round(panel_w / max(motif_w + 24, 70)))
-    tx = panel_w // nx
-    ty = max(motif_h + 30, int(round(tx * 1.35)))
+    if period_x is not None and period_x > 0:
+        nx = max(1, round(panel_w / period_x))
+        tx = panel_w // nx
+    else:
+        nx = max(1, round(panel_w / max(motif_w + 24, 70)))
+        tx = panel_w // nx
+
+    if period_y is not None and period_y > 0:
+        scale_y = float(tx) / float(period_x) if (period_x and period_x > 0) else 1.0
+        ty = max(motif_h + 10, int(round(period_y * scale_y)))
+    else:
+        ty = max(motif_h + 30, int(round(tx * 1.35)))
 
     binary_grid = np.zeros((panel_h, panel_w), dtype=np.uint8)
 
@@ -212,41 +228,47 @@ def synthesize_replicated_body_draft(
         ny = max(1, panel_h // ty)
         for r in range(ny + 1):
             cy = int(r * ty + ty // 2)
-            if cy >= panel_h + motif_h // 2:
+            if not wrap_v and cy >= panel_h + motif_h // 2:
                 continue
             for c in range(nx):
                 cx = (c * tx + tx // 2) % panel_w
-                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1))
+                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1), wrap_v=wrap_v)
 
     # 2. Brick Repeat (Stagger vertical offset per column)
     elif arrangement == "brick":
         ny = max(1, panel_h // ty)
         for c in range(nx):
             cx = (c * tx + tx // 2) % panel_w
-            y_off = (ty // 2) if (c % 2 == 1) else 0
+            y_stagger = (brick_shift_y if brick_shift_y and brick_shift_y > 0 else (ty // 2)) if (c % 2 == 1) else 0
             for r in range(ny + 2):
-                cy = int(r * ty + y_off + ty // 4)
-                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1))
+                cy = int(r * ty + y_stagger + ty // 4)
+                if not wrap_v and cy >= panel_h + motif_h // 2:
+                    continue
+                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1), wrap_v=wrap_v)
 
     # 3. Diamond / Ogival Jaal (Diagonal interlocking centers)
     elif arrangement in ("diamond_ogival", "all_over_jaal"):
         ny_steps = max(2, panel_h // max(1, (ty // 2)))
         for r in range(ny_steps + 1):
             cy = int(r * (ty // 2) + ty // 4)
+            if not wrap_v and cy >= panel_h + motif_h // 2:
+                continue
             for c in range(nx * 2):
                 if (r + c) % 2 == 0:
                     cx = int(c * (tx // 2) + tx // 4) % panel_w
-                    _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1))
+                    _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1), wrap_v=wrap_v)
 
     # 4. Half-Drop (Default & most prominent Kanchipuram / Banarasi arrangement)
     else:
         ny_half = max(2, panel_h // max(1, (ty // 2)))
         for r in range(ny_half + 1):
             cy = int(r * (ty // 2) + ty // 4)
-            x_off = (tx // 2) if (r % 2 == 1) else 0
+            if not wrap_v and cy >= panel_h + motif_h // 2:
+                continue
+            x_stagger = (half_drop_shift_x if half_drop_shift_x and half_drop_shift_x > 0 else (tx // 2)) if (r % 2 == 1) else 0
             for c in range(nx):
-                cx = (c * tx + x_off + tx // 2) % panel_w
-                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1))
+                cx = (c * tx + x_stagger + tx // 2) % panel_w
+                _stamp_motif(body_canvas, binary_grid, pat_mask, cx, cy, motif_w, motif_h, panel_w, panel_h, zari_bgr, alternating_mirror and (c % 2 == 1), wrap_v=wrap_v)
 
     # Ground tabby binders
     for y in range(panel_h):
@@ -369,6 +391,10 @@ def extract_and_assemble_2d_design(
             panel_w=panel_w,
             panel_h=panel_h,
             arrangement=detected_arr,
+            period_x=getattr(repeat, "vector_x", None),
+            period_y=getattr(repeat, "vector_y", None),
+            half_drop_shift_x=getattr(repeat, "half_drop_shift_x", None),
+            brick_shift_y=getattr(repeat, "brick_shift_y", None),
         )
         pattern_mask = (panel_binary > 128)
         u_colors = np.array([ground_bgr, zari_bgr], dtype=np.uint8)
@@ -380,9 +406,18 @@ def extract_and_assemble_2d_design(
         else:
             scaled_img = image.copy()
 
-        smoothed = cv2.bilateralFilter(scaled_img, d=5, sigmaColor=35, sigmaSpace=35)
-        quantized_auth = LoomPreprocessor.quantize_colors(smoothed, color_count=max(2, min(color_count, 16)))
-        authentic_master = vectorize_boundaries(quantized_auth)
+        flat_check = scaled_img.reshape(-1, 3)
+        check_sample = flat_check[::max(1, len(flat_check) // 20000)]
+        u_raw = np.unique(check_sample, axis=0)
+        is_discrete = len(u_raw) <= max(2, min(color_count, 16))
+
+        if is_discrete:
+            # Bypass smoothing & re-quantization to preserve 100% exact single-pixel weave floats
+            authentic_master = scaled_img.copy()
+        else:
+            smoothed = cv2.bilateralFilter(scaled_img, d=5, sigmaColor=35, sigmaSpace=35)
+            quantized_auth = LoomPreprocessor.quantize_colors(smoothed, color_count=max(2, min(color_count, 16)))
+            authentic_master = vectorize_boundaries(quantized_auth)
 
         if layout in ("all_over_brocade", "border_only"):
             authentic_master = ensure_seamless_horizontal_wrap(authentic_master)

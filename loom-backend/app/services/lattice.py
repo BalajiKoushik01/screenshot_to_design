@@ -65,6 +65,49 @@ class RepeatResult:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _is_discrete_cad(image: np.ndarray) -> bool:
+    """Detect whether an image is a discrete CAD punch-card or graphic bitmap."""
+    if image.ndim == 2:
+        return len(np.unique(image)) <= 16
+    flat = image.reshape(-1, 3)
+    if len(flat) > 20000:
+        step = max(1, len(flat) // 20000)
+        flat = flat[::step]
+    return len(np.unique(flat, axis=0)) <= 16
+
+
+def _detect_micro_weave_binder(gray: np.ndarray) -> Optional[Tuple[int, int]]:
+    """Check if the matrix is a pure 1-pixel alternating micro-weave tabby binder."""
+    h, w = gray.shape
+    if h < 8 or w < 8:
+        return None
+    sub = gray[:min(h, 64), :min(w, 64)]
+    y_idx, x_idx = np.indices(sub.shape)
+    even_mask = (x_idx + y_idx) % 2 == 0
+    odd_mask = ~even_mask
+    u_even = np.unique(sub[even_mask])
+    u_odd = np.unique(sub[odd_mask])
+    if len(u_even) == 1 and len(u_odd) == 1 and u_even[0] != u_odd[0]:
+        return (2, 2)
+    return None
+
+
+def _snap_to_exact_divisor(period: float, dimension: int, tol_px: float = 1.2, tol_pct: float = 0.03) -> int:
+    """Snap detected period to the nearest exact integer divisor of dimension when within tolerance."""
+    if period <= 0:
+        return 0
+    divisors = [d for d in range(2, dimension + 1) if dimension % d == 0]
+    best_d = None
+    min_diff = 1e9
+    for d in divisors:
+        diff = abs(period - d)
+        if diff <= tol_px or (diff / period <= tol_pct):
+            if diff < min_diff:
+                min_diff = diff
+                best_d = d
+    return best_d if best_d is not None else int(round(period))
+
+
 def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
     """Detect repeat vector, primitive lattice basis, arrangement, and symmetry via 2D autocorrelation.
 
@@ -75,8 +118,29 @@ def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
     Returns:
         RepeatResult with periods, confidence, basis vectors, arrangement, and wallpaper symmetry.
     """
-    gray, scale = _preprocess(image, max_side)
+    gray, scale, is_cad = _preprocess(image, max_side)
     h_orig, w_orig = image.shape[:2]
+
+    # Check for pure micro-weave tabby punch-cards (e.g. 1-bit 'ani' ground weft cards)
+    if is_cad:
+        micro_tabby = _detect_micro_weave_binder(gray)
+        if micro_tabby is not None:
+            tx_m, ty_m = micro_tabby
+            return RepeatResult(
+                vector_x=tx_m,
+                vector_y=ty_m,
+                confidence=1.0,
+                symmetry_group="p4m",
+                freq_x=1.0 / tx_m,
+                freq_y=1.0 / ty_m,
+                arrangement="micro_weave_binder",
+                half_drop_shift_x=0,
+                brick_shift_y=0,
+                basis_v1=(tx_m, 0),
+                basis_v2=(0, ty_m),
+                subpixel_period_x=float(tx_m),
+                subpixel_period_y=float(ty_m),
+            )
 
     # Compute normalized 2D autocorrelation
     acorr = _autocorrelation_2d(gray)
@@ -84,8 +148,9 @@ def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
     ch, cw = h // 2, w // 2
 
     # 1. 1D Crosshair analysis for fundamental orthogonal axes
-    period_x_1d, conf_x = _dominant_period(acorr[ch, :])
-    period_y_1d, conf_y = _dominant_period(acorr[:, cw])
+    min_p_1d = 2 if is_cad else 8
+    period_x_1d, conf_x = _dominant_period(acorr[ch, :], min_period=min_p_1d)
+    period_y_1d, conf_y = _dominant_period(acorr[:, cw], min_period=min_p_1d)
 
     # 2. Extract 2D local maxima peaks with sub-pixel refinement
     peaks_2d = _detect_2d_peaks(acorr, ch, cw)
@@ -100,8 +165,12 @@ def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
     sub_py = p_y_scaled / scale if p_y_scaled > 0 else 0.0
 
     # Scale periods back to original image space
-    period_x = int(round(sub_px)) if sub_px > 0 else 0
-    period_y = int(round(sub_py)) if sub_py > 0 else 0
+    if is_cad:
+        period_x = _snap_to_exact_divisor(sub_px, w_orig)
+        period_y = _snap_to_exact_divisor(sub_py, h_orig)
+    else:
+        period_x = int(round(sub_px)) if sub_px > 0 else 0
+        period_y = int(round(sub_py)) if sub_py > 0 else 0
 
     # Scale basis vectors back to original image space
     v1_orig = (int(round(basis_v1[0] / scale)), int(round(basis_v1[1] / scale)))
@@ -109,6 +178,14 @@ def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
 
     half_drop_shift = int(round(shift_x / scale)) if shift_x != 0 else 0
     brick_shift = int(round(shift_y / scale)) if shift_y != 0 else 0
+
+    # Exact snapping for half-drop and brick shifts
+    if arrangement == "half_drop" and period_x > 0:
+        if abs(half_drop_shift - period_x // 2) <= 3:
+            half_drop_shift = period_x // 2
+    elif arrangement == "brick" and period_y > 0:
+        if abs(brick_shift - period_y // 2) <= 3:
+            brick_shift = period_y // 2
 
     # Overall confidence combining 1D and 2D signals
     conf_candidates = [c for c in (conf_x, conf_y, conf_2d) if c > 0]
@@ -143,10 +220,15 @@ def detect_repeat(image: np.ndarray, max_side: int = 512) -> RepeatResult:
 # Preprocessing & 2D Autocorrelation
 # ---------------------------------------------------------------------------
 
-def _preprocess(image: np.ndarray, max_side: int) -> Tuple[np.ndarray, float]:
+def _preprocess(image: np.ndarray, max_side: int) -> Tuple[np.ndarray, float, bool]:
     """Grayscale + multi-scale edge enhancement + optional downscale."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
     h, w = gray.shape
+    is_cad = _is_discrete_cad(image)
+
+    if is_cad:
+        # Do NOT downscale CAD files or apply blur/Laplacian/Sobel/CLAHE to preserve 1px weave binders
+        return gray, 1.0, True
 
     scale = max_side / max(h, w) if max(h, w) > max_side else 1.0
     if scale < 1.0:
@@ -168,7 +250,7 @@ def _preprocess(image: np.ndarray, max_side: int) -> Tuple[np.ndarray, float]:
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 4))
     enhanced = clahe.apply(norm_grad)
 
-    return enhanced, scale
+    return enhanced, scale, False
 
 
 def _autocorrelation_2d(gray: np.ndarray) -> np.ndarray:
@@ -392,10 +474,10 @@ def _analyze_lattice_geometry(
             arr = "running_stripe"
         return (px, 0), (0, py), arr, 0, 0, float(np.clip((conf_x + conf_y) / 2.0, 0.0, 1.0)), p_x_1d, p_y_1d
 
-    # Separate orthogonal peaks (|dy| < 8 or |dx| < 8) from diagonal peaks
-    ortho_h_candidates = [p for p in peaks if abs(p.dy) <= 6 and p.dx >= 10]
-    ortho_v_candidates = [p for p in peaks if abs(p.dx) <= 6 and abs(p.dy) >= 10]
-    diagonal_candidates = [p for p in peaks if p.dx >= 10 and abs(p.dy) >= 10]
+    # Separate orthogonal peaks (|dy| <= 2.5 or |dx| <= 2.5) from diagonal peaks
+    ortho_h_candidates = [p for p in peaks if abs(p.dy) <= 2.5 and p.dx >= 8]
+    ortho_v_candidates = [p for p in peaks if abs(p.dx) <= 2.5 and abs(p.dy) >= 8]
+    diagonal_candidates = [p for p in peaks if p.dx >= 8 and abs(p.dy) >= 8]
 
     ortho_h_fund = _select_fundamental_peak_1d(ortho_h_candidates, axis="x")
     ortho_v_fund = _select_fundamental_peak_1d(ortho_v_candidates, axis="y")
@@ -403,10 +485,17 @@ def _analyze_lattice_geometry(
 
     best_px = p_x_1d
     best_py = p_y_1d
-    if ortho_h_fund and (p_x_1d == 0 or ortho_h_fund.prominence > conf_x * 0.85):
+    if best_px == 0 and ortho_h_fund:
         best_px = ortho_h_fund.dx
         conf_x = max(conf_x, ortho_h_fund.prominence)
-    if ortho_v_fund and (p_y_1d == 0 or ortho_v_fund.prominence > conf_y * 0.85):
+    elif ortho_h_fund and abs(ortho_h_fund.dx - best_px) <= 1.5:
+        best_px = ortho_h_fund.dx
+        conf_x = max(conf_x, ortho_h_fund.prominence)
+
+    if best_py == 0 and ortho_v_fund:
+        best_py = abs(ortho_v_fund.dy)
+        conf_y = max(conf_y, ortho_v_fund.prominence)
+    elif ortho_v_fund and abs(abs(ortho_v_fund.dy) - best_py) <= 1.5:
         best_py = abs(ortho_v_fund.dy)
         conf_y = max(conf_y, ortho_v_fund.prominence)
 
@@ -424,13 +513,13 @@ def _analyze_lattice_geometry(
 
         # 1. Half-Drop: pure horizontal repeat (Tx, 0) exists with strong prominence, staggered by dx_d ≈ Tx / 2
         is_half_drop = (
-            (has_pure_h and abs(dx_d - best_px / 2.0) <= max(4.0, best_px * 0.18)) or
-            (best_px == 0 and best_py > 0 and abs(dy_d - best_py) <= max(4.0, best_py * 0.18))
+            (has_pure_h and abs(dx_d - best_px / 2.0) <= max(3.0, best_px * 0.12)) or
+            (best_px == 0 and best_py > 0 and abs(dy_d - best_py) <= max(3.0, best_py * 0.12))
         )
         # 2. Brick: pure vertical repeat (0, Ty) exists with strong prominence, staggered by dy_d ≈ Ty / 2
         is_brick = (
-            (has_pure_v and abs(dy_d - best_py / 2.0) <= max(4.0, best_py * 0.18)) or
-            (best_py == 0 and best_px > 0 and abs(dx_d - best_px) <= max(4.0, best_px * 0.18))
+            (has_pure_v and abs(dy_d - best_py / 2.0) <= max(3.0, best_py * 0.12)) or
+            (best_py == 0 and best_px > 0 and abs(dx_d - best_px) <= max(3.0, best_px * 0.12))
         )
 
         if is_half_drop and not (is_brick and conf_y > conf_x * 1.3):
