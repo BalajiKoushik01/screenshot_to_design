@@ -180,6 +180,7 @@ const ResultsPanel: React.FC = () => {
   const tiffUrl       = useLoomStore(s => s.tiffUrl);
   const manifestUrl   = useLoomStore(s => s.manifestUrl);
   const taskId        = useLoomStore(s => s.taskId);
+  const dotBmpUrl     = useLoomStore(s => s.pipelineResult?.dot_bmp_url);
   const regions       = useLoomStore(s => s.regions);
   const repeat        = useLoomStore(s => s.repeat) as RepeatData | null;
   const sharpness     = useLoomStore(s => s.sharpness);
@@ -201,6 +202,15 @@ const ResultsPanel: React.FC = () => {
 
       {/* ── Downloads ── */}
       <Collapsible title="Downloads" icon={<Download size={12} />} defaultOpen>
+        {taskId && dotBmpUrl && (
+          <DownloadCard
+            href={`/api/v1/designs/${taskId}/download/jeri?indexed=true`}
+            filename="saree_dots.bmp"
+            icon={<Grid3X3 size={15} />}
+            title="Black-and-white Dot BMP"
+            subtitle="8-bit indexed · Edit in PaintShop Pro or Photoshop"
+          />
+        )}
         <DownloadCard
           href={taskId ? `/api/v1/designs/${taskId}/download/bmp` : downloadUrl}
           filename="loom_design.bmp"

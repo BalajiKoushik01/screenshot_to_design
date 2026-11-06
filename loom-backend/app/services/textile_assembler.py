@@ -573,6 +573,13 @@ def extract_and_assemble_2d_design(
     _save_1bit_monochrome_bmp(panel_jeri, panel_jeri_bmp_path)
     files_to_zip.append((panel_jeri_bmp_path, panel_jeri_bmp_name))
 
+    dot_bmp_name = f"{source_stem}_dots_w{panel_w}.bmp"
+    dot_bmp_path = str(export_dir / dot_bmp_name)
+    dot_bitmap = Image.fromarray((panel_jeri > 0).astype(np.uint8))
+    dot_bitmap.putpalette([0, 0, 0, 255, 255, 255] + [0] * 762)
+    dot_bitmap.save(dot_bmp_path, format="BMP")
+    files_to_zip.append((dot_bmp_path, dot_bmp_name))
+
     panel_jeri_png_name = f"{source_stem}_jeri_preview.png"
     panel_jeri_png_path = str(export_dir / panel_jeri_png_name)
     cv2.imwrite(panel_jeri_png_path, panel_jeri)
@@ -820,6 +827,7 @@ def extract_and_assemble_2d_design(
         "saree_panel_redwhite_preview_url":  f"/static/exports/{panel_rw_png_name}",
         "saree_panel_redwhite_bmp_url":      f"/static/exports/{panel_rw_bmp_name}",
         # Weft Separations (Panel)
+        "dot_bmp_url":                     f"/static/exports/{dot_bmp_name}",
         "jeri_bmp_url":                      f"/static/exports/{panel_jeri_bmp_name}",
         "jeri_preview_url":                  f"/static/exports/{panel_jeri_png_name}",
         "ani_bmp_url":                       f"/static/exports/{panel_ani_bmp_name}",

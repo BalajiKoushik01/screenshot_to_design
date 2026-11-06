@@ -27,12 +27,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source code
 COPY loom-backend/app/ ./app/
-COPY loom-backend/static/ ./static/
 
 # Copy built frontend assets to static serving
 COPY --from=frontend-builder /app/frontend/dist/ ./static/dist/
 
 # Cloud environment settings
+ENV STATIC_EXPORTS_DIR=/static/exports
 ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV PYTHONUNBUFFERED=1

@@ -231,6 +231,8 @@ def test_pattern_completion_lattice_fill():
         defect_mask=defect_mask,
     )
 
+    assert np.array_equal(completed[defect_mask == 0], canvas_damaged[defect_mask == 0])
+
     # Verify that the central circle has been accurately restored
     dot_center_val = completed[112, 112]
     assert dot_center_val[2] > 180 and dot_center_val[1] > 160, f"Dot was not restored: {dot_center_val}"
