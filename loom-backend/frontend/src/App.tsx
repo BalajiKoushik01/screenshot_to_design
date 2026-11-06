@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import LoomCanvas, { LoomCanvasRef } from './components/LoomCanvas';
+import DotStudio from './components/DotStudio';
 import CompleteWorkspace from './components/CompleteWorkspace';
 import StageMonitor   from './components/StageMonitor';
 import ResultsPanel   from './components/ResultsPanel';
@@ -39,6 +40,7 @@ const App: React.FC = () => {
   const [colorCount,   setColorCount]   = useState(8);
   const [targetWidth,  setTargetWidth]  = useState(1200);
   const [customWidth,  setCustomWidth]  = useState('');
+  const [openStudio, setOpenStudio] = useState(false);
 
   const imageFileRef = useRef<File | null>(null);
   const maskFileRef  = useRef<File | null>(null);
@@ -320,11 +322,25 @@ const App: React.FC = () => {
                 transition={{ duration: 0.35, ease: [0, 0, 0.2, 1] }}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
               >
-                <UploadZone
-                  getRootProps={getRootProps}
-                  getInputProps={getInputProps}
-                  isDragActive={isDragActive}
-                />
+                {openStudio ? (
+                  <>
+                    <button type="button" className="btn btn-secondary" style={{ alignSelf: 'start', marginBottom: 12 }}
+                      onClick={() => {
+                        if (window.confirm('Return to image upload? Save your project first to keep your edits.')) setOpenStudio(false);
+                      }}>Back to image upload</button>
+                    <DotStudio />
+                  </>
+                ) : (
+                  <>
+                    <UploadZone
+                      getRootProps={getRootProps}
+                      getInputProps={getInputProps}
+                      isDragActive={isDragActive}
+                    />
+                    <button type="button" className="btn btn-secondary" style={{ alignSelf: 'center', marginTop: 16 }}
+                      onClick={() => setOpenStudio(true)}>Open an existing Dot Studio project</button>
+                  </>
+                )}
               </motion.div>
             ) : (
               <motion.div

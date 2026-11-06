@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { encodeDotBmp, fillDots } from '../dotBitmap';
+import { decodeDotProject, encodeDotBmp, encodeDotProject, fillDots, maxProjectDots } from '../dotBitmap';
 
 type Tool = 'pencil' | 'eraser' | 'fill';
 type Point = { x: number; y: number };
 const tools: Tool[] = ['pencil', 'eraser', 'fill'];
 
-export default function DotStudio({ source }: { source: string }) {
+export default function DotStudio({ source }: { source?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pixels = useRef<Uint8Array>(new Uint8Array());
   const undo = useRef<Uint8Array[]>([]);
@@ -16,13 +16,21 @@ export default function DotStudio({ source }: { source: string }) {
   const [ink, setInk] = useState(1);
   const [zoom, setZoom] = useState(2);
   const [grid, setGrid] = useState(true);
+  const [mirror, setMirror] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState({ undo: false, redo: false });
 
   useEffect(() => {
+    if (!source) return;
     const image = new Image();
     image.onload = () => {
       try {
+        if (image.naturalWidth * image.naturalHeight > maxProjectDots ||
+            image.naturalWidth > 16_384 || image.naturalHeight > 16_384) {
+          setError('This design exceeds the Dot Studio project size limit.');
+          return;
+        }
         const target = canvas.current!;
         target.width = image.naturalWidth;
         target.height = image.naturalHeight;
@@ -45,9 +53,9 @@ export default function DotStudio({ source }: { source: string }) {
 
   const context = () => canvas.current!.getContext('2d')!;
 
-  const render = () => {
+  const render = (width = size.width, height = size.height) => {
     const ctx = context();
-    const frame = ctx.createImageData(size.width, size.height);
+    const frame = ctx.createImageData(width, height);
     pixels.current.forEach((dot, index) => {
       const offset = index * 4;
       frame.data.fill(dot * 255, offset, offset + 3);
@@ -97,6 +105,11 @@ export default function DotStudio({ source }: { source: string }) {
     while (true) {
       pixels.current[y * size.width + x] = value;
       ctx.fillRect(x, y, 1, 1);
+      if (mirror) {
+        const reflectedX = size.width - 1 - x;
+        pixels.current[y * size.width + reflectedX] = value;
+        ctx.fillRect(reflectedX, y, 1, 1);
+      }
       if (x === to.x && y === to.y) break;
       const step = 2 * error;
       if (step >= dy) {
@@ -111,7 +124,7 @@ export default function DotStudio({ source }: { source: string }) {
   };
 
   const pointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!size.width || event.button !== 0 || stroke.current) return;
+    if (!size.width || opening || event.button !== 0 || stroke.current) return;
     const point = pointAt(event);
     const index = point.y * size.width + point.x;
     if (tool === 'fill') {
@@ -140,22 +153,51 @@ export default function DotStudio({ source }: { source: string }) {
     if (stroke.current?.pointer === event.pointerId) stroke.current = null;
   };
 
-  const download = () => {
-    const bmp = encodeDotBmp(pixels.current, size.width, size.height);
-    const url = URL.createObjectURL(new Blob([bmp], { type: 'image/bmp' }));
+  const download = (bytes: ArrayBuffer, filename: string, mimeType: string) => {
+    const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'saree_edited_dots.bmp';
+    link.download = filename;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const openProject = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file || opening || stroke.current) return;
+    if (history.undo && !window.confirm('Replace this design? Save a project first to keep your current edits.')) return;
+    setOpening(true);
+    setError('');
+    try {
+      if (file.size > maxProjectDots + 12) throw new Error('This project exceeds the Dot Studio size limit.');
+      const project = decodeDotProject(await file.arrayBuffer());
+      const target = canvas.current;
+      if (!target) return;
+      target.width = project.width;
+      target.height = project.height;
+      pixels.current = project.dots;
+      undo.current = [];
+      redo.current = [];
+      setSize({ width: project.width, height: project.height });
+      render(project.width, project.height);
+      updateHistory();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The project could not be opened.');
+    } finally {
+      setOpening(false);
+    }
   };
 
   return (
     <section className="card" style={{ padding: 16, minWidth: 0 }} aria-label="Saree Dot Studio">
       <h2>Saree Dot Studio</h2>
-      <p className="text-xs text-muted">Edit the reconstructed Zari plane one dot at a time. Export your edits before starting another design or closing the page.</p>
+      <p className="text-xs text-muted">Edit a black-and-white dot design. Save an editable project to resume later or export an 8-bit BMP for handoff.</p>
       {error && <p role="alert">{error}</p>}
-      {!size.width && !error && <p role="status">Loading the reconstructed dots…</p>}
+      {source && !size.width && !error && <p role="status">Loading the reconstructed dots…</p>}
+      {(!source || size.width > 0 || error) && (
+        <label>Open Dot Studio project <input type="file" accept=".sjd" disabled={opening} onChange={openProject} /></label>
+      )}
       {size.width > 0 && (
         <>
           <div className="flex items-center gap-2" style={{ flexWrap: 'wrap', margin: '12px 0' }}>
@@ -173,7 +215,13 @@ export default function DotStudio({ source }: { source: string }) {
               {[1, 2, 4, 8, 16].map((level) => <option key={level} value={level}>{level}×</option>)}
             </select></label>
             <label><input type="checkbox" checked={grid} onChange={(event) => setGrid(event.target.checked)} /> Dot grid</label>
-            <button type="button" className="btn btn-primary btn-sm" onClick={download}>Export edited 8-bit BMP</button>
+            <label><input type="checkbox" checked={mirror} onChange={(event) => setMirror(event.target.checked)} /> Mirror pencil and eraser</label>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => download(
+              encodeDotProject(pixels.current, size.width, size.height), 'saree_design.sjd', 'application/octet-stream',
+            )}>Save project</button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => download(
+              encodeDotBmp(pixels.current, size.width, size.height), 'saree_edited_dots.bmp', 'image/bmp',
+            )}>Export edited 8-bit BMP</button>
           </div>
           <p className="text-xs text-muted">{size.width} hooks × {size.height} picks</p>
         </>

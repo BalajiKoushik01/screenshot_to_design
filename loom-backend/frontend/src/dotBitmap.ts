@@ -41,3 +41,34 @@ export function fillDots(dots: Uint8Array, width: number, start: number, value: 
     visit(index + width);
   }
 }
+
+const projectMagic = 0x534a4431; // SJD1
+export const maxProjectDots = 8_000_000;
+const projectHeaderBytes = 12;
+
+export function encodeDotProject(dots: Uint8Array, width: number, height: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(projectHeaderBytes + dots.length);
+  const header = new DataView(buffer);
+  header.setUint32(0, projectMagic);
+  header.setUint32(4, width);
+  header.setUint32(8, height);
+  new Uint8Array(buffer, projectHeaderBytes).set(dots);
+  return buffer;
+}
+
+export function decodeDotProject(buffer: ArrayBuffer) {
+  const header = new DataView(buffer);
+  if (buffer.byteLength < projectHeaderBytes || header.getUint32(0) !== projectMagic) {
+    throw new Error('Choose a valid .sjd project saved by Dot Studio.');
+  }
+  const width = header.getUint32(4);
+  const height = header.getUint32(8);
+  const count = width * height;
+  if (!width || !height || width > 16_384 || height > 16_384 ||
+      count > maxProjectDots || buffer.byteLength !== projectHeaderBytes + count) {
+    throw new Error('This project has invalid or unsupported dimensions.');
+  }
+  const dots = new Uint8Array(buffer, projectHeaderBytes);
+  if (dots.some(dot => dot > 1)) throw new Error('The project contains invalid dot values.');
+  return { width, height, dots };
+}
