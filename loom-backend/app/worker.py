@@ -107,6 +107,7 @@ def process_textile_design_task(
         pipeline_log                     — ordered stage log
     """
     from app.services.cv_engine    import LoomPreprocessor
+    from app.services.photo_trace import trace_photo_dots
     from app.services.restoration  import compute_sharpness, restore
     from app.services.segmentation import segment_regions
     from app.services.lattice      import detect_repeat
@@ -147,6 +148,21 @@ def process_textile_design_task(
     warped = LoomPreprocessor.apply_perspective_correction(
         image_path=tmp_png.name, coordinates=coordinates
     )
+
+    photo_trace = {}
+    try:
+        source_crop = LoomPreprocessor.apply_perspective_correction(image_path, coordinates)
+        trace = trace_photo_dots(source_crop, width)
+        trace_name = f"{source_stem}_w{width}_photo_trace.png"
+        reference_name = f"{source_stem}_w{width}_photo_reference.png"
+        reference = cv2.resize(source_crop, (trace.shape[1], trace.shape[0]), interpolation=cv2.INTER_AREA)
+        if cv2.imwrite(str(export_dir / trace_name), trace) and cv2.imwrite(str(export_dir / reference_name), reference):
+            photo_trace = {
+                "photo_trace_url": f"/static/exports/{trace_name}",
+                "photo_reference_url": f"/static/exports/{reference_name}",
+            }
+    except (ValueError, cv2.error) as exc:
+        log.append(f"Photo trace unavailable: {exc}")
 
     warped_mask = None
     if os.path.isfile(mask_path):
@@ -300,6 +316,7 @@ def process_textile_design_task(
 
     # ── Return extended result dict ────────────────────────────────────────
     result: Dict[str, Any] = {
+        **photo_trace,
         # Primary exports
         "file_url":              synth_res.get("master_2d_bmp_url") or f"/static/exports/{bmp_name}",
         "raw_quant_bmp_url":     f"/static/exports/{bmp_name}",

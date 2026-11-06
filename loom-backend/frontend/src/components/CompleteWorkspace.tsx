@@ -23,7 +23,7 @@ import { useLoomStore } from '../store/useLoomStore';
 import { REGION_COLORS } from '../types';
 import DotStudio from './DotStudio';
 
-type ViewMode = 'dot_studio' | 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
+type ViewMode = 'photo_trace' | 'dot_studio' | 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
 
 const triggerFileDownload = async (url: string, defaultFilename: string) => {
   try {
@@ -243,6 +243,13 @@ const CompleteWorkspace: React.FC = () => {
       >
         {/* Mode Selector Tabs */}
         <div style={{ display: 'flex', gap: '6px', background: 'var(--color-surface-2)', padding: '4px', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+          {pipelineResult?.photo_trace_url && (
+            <button type="button"
+              className={`btn btn-sm ${mode === 'photo_trace' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setMode('photo_trace')}>
+              <Eye size={13} /> Edit photo trace
+            </button>
+          )}
           {pipelineResult?.jeri_preview_url && (
             <button type="button"
               className={`btn btn-sm ${mode === 'dot_studio' ? 'btn-primary' : 'btn-ghost'}`}
@@ -611,6 +618,17 @@ const CompleteWorkspace: React.FC = () => {
         }}
       >
         {/* VIEW 0: Pure 2D Master Jacquard Design (Human & Room Removed) */}
+        {pipelineResult?.photo_trace_url && (
+          <div hidden={mode !== 'photo_trace'} style={{ width: '100%', minWidth: 0 }}>
+            <details style={{ marginBottom: 12 }}>
+              <summary>Compare with the calibrated photo crop</summary>
+              <p>Pin the corners around one visible border or motif before processing. The trace follows visible contrast and may include folds or shadows.</p>
+              <img src={pipelineResult.photo_reference_url} alt="Calibrated photo crop"
+                style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }} />
+            </details>
+            <DotStudio key={pipelineResult.photo_trace_url} source={pipelineResult.photo_trace_url} />
+          </div>
+        )}
         {pipelineResult?.jeri_preview_url && (
           <div hidden={mode !== 'dot_studio'} style={{ width: '100%', minWidth: 0 }}>
             <DotStudio key={pipelineResult.jeri_preview_url} source={pipelineResult.jeri_preview_url} />

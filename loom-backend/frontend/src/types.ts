@@ -104,6 +104,8 @@ export interface PipelineResult {
   pallu_bmp_url?:                  string;
   pallu_jeri_bmp_url?:             string;
   pallu_ani_bmp_url?:              string;
+  photo_trace_url?:                string;
+  photo_reference_url?:            string;
   jeri_preview_url?:               string;
   dot_bmp_url?:                    string;
   jeri_bmp_url?:                   string;
