@@ -1,11 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { decodeDotBmp, decodeDotProject, encodeDotBmp, encodeDotProject, fillDots, maxProjectDots } from '../dotBitmap';
 
+import type { DotPlane } from '../sareeAssembly';
+
 type Tool = 'pencil' | 'eraser' | 'fill';
 type Point = { x: number; y: number };
 const tools: Tool[] = ['pencil', 'eraser', 'fill'];
 
-export default function DotStudio({ source }: { source?: string }) {
+export default function DotStudio({ source, initial, onApply }: {
+  source?: string;
+  initial?: DotPlane;
+  onApply?: (plane: DotPlane) => void;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pixels = useRef<Uint8Array>(new Uint8Array());
   const undo = useRef<Uint8Array[]>([]);
@@ -63,6 +69,15 @@ export default function DotStudio({ source }: { source?: string }) {
     });
     ctx.putImageData(frame, 0, 0);
   };
+
+  useEffect(() => {
+    if (!initial || !canvas.current) return;
+    canvas.current.width = initial.width;
+    canvas.current.height = initial.height;
+    pixels.current = initial.dots.slice();
+    setSize({ width: initial.width, height: initial.height });
+    render(initial.width, initial.height);
+  }, [initial]);
 
   const updateHistory = () => setHistory({ undo: undo.current.length > 0, redo: redo.current.length > 0 });
   const checkpoint = () => {
@@ -218,6 +233,8 @@ export default function DotStudio({ source }: { source?: string }) {
             </select></label>
             <label><input type="checkbox" checked={grid} onChange={(event) => setGrid(event.target.checked)} /> Dot grid</label>
             <label><input type="checkbox" checked={mirror} onChange={(event) => setMirror(event.target.checked)} /> Mirror pencil and eraser</label>
+            {onApply && <button type="button" className="btn btn-primary btn-sm"
+              onClick={() => onApply({ ...size, dots: pixels.current.slice() })}>Use these dots in assembly</button>}
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => download(
               encodeDotProject(pixels.current, size.width, size.height), 'saree_design.sjd', 'application/octet-stream',
             )}>Save project</button>

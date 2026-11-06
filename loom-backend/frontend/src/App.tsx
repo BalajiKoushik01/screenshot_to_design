@@ -9,6 +9,7 @@ import {
 
 import LoomCanvas, { LoomCanvasRef } from './components/LoomCanvas';
 import DotStudio from './components/DotStudio';
+import AssemblyStudio from './components/AssemblyStudio';
 import CompleteWorkspace from './components/CompleteWorkspace';
 import StageMonitor   from './components/StageMonitor';
 import ResultsPanel   from './components/ResultsPanel';
@@ -40,7 +41,7 @@ const App: React.FC = () => {
   const [colorCount,   setColorCount]   = useState(8);
   const [targetWidth,  setTargetWidth]  = useState(1200);
   const [customWidth,  setCustomWidth]  = useState('');
-  const [openStudio, setOpenStudio] = useState(false);
+  const [openStudio, setOpenStudio] = useState<'dots' | 'assembly' | null>(null);
 
   const imageFileRef = useRef<File | null>(null);
   const maskFileRef  = useRef<File | null>(null);
@@ -326,9 +327,9 @@ const App: React.FC = () => {
                   <>
                     <button type="button" className="btn btn-secondary" style={{ alignSelf: 'start', marginBottom: 12 }}
                       onClick={() => {
-                        if (window.confirm('Return to image upload? Save your project first to keep your edits.')) setOpenStudio(false);
+                        if (window.confirm('Return to image upload? Save your project first to keep your edits.')) setOpenStudio(null);
                       }}>Back to image upload</button>
-                    <DotStudio />
+                    {openStudio === 'assembly' ? <AssemblyStudio /> : <DotStudio />}
                   </>
                 ) : (
                   <>
@@ -338,7 +339,9 @@ const App: React.FC = () => {
                       isDragActive={isDragActive}
                     />
                     <button type="button" className="btn btn-secondary" style={{ alignSelf: 'center', marginTop: 16 }}
-                      onClick={() => setOpenStudio(true)}>Edit an existing dot BMP or project</button>
+                      onClick={() => setOpenStudio('dots')}>Edit an existing dot BMP or project</button>
+                    <button type="button" className="btn btn-secondary" style={{ alignSelf: 'center', marginTop: 8 }}
+                      onClick={() => setOpenStudio('assembly')}>Assemble a saree or open an assembly project</button>
                   </>
                 )}
               </motion.div>
