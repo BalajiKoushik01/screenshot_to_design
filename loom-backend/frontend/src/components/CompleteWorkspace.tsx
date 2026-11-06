@@ -21,8 +21,9 @@ import {
 } from 'lucide-react';
 import { useLoomStore } from '../store/useLoomStore';
 import { REGION_COLORS } from '../types';
+import DotStudio from './DotStudio';
 
-type ViewMode = 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
+type ViewMode = 'dot_studio' | 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
 
 const triggerFileDownload = async (url: string, defaultFilename: string) => {
   try {
@@ -66,7 +67,7 @@ const CompleteWorkspace: React.FC = () => {
     pipelineResult: s.pipelineResult,
   }));
 
-  const [mode, setMode] = useState<ViewMode>('master_2d');
+  const [mode, setMode] = useState<ViewMode>(pipelineResult?.jeri_preview_url ? 'dot_studio' : 'master_2d');
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [regionOpacity, setRegionOpacity] = useState<number>(0.65);
   const [hoveredRegionIdx, setHoveredRegionIdx] = useState<number | null>(null);
@@ -242,6 +243,13 @@ const CompleteWorkspace: React.FC = () => {
       >
         {/* Mode Selector Tabs */}
         <div style={{ display: 'flex', gap: '6px', background: 'var(--color-surface-2)', padding: '4px', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+          {pipelineResult?.jeri_preview_url && (
+            <button type="button"
+              className={`btn btn-sm ${mode === 'dot_studio' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setMode('dot_studio')}>
+              <Grid3X3 size={13} /> Dot Studio
+            </button>
+          )}
           <button
             type="button"
             className={`btn btn-sm ${mode === 'master_2d' ? 'btn-primary' : 'btn-ghost'}`}
@@ -603,6 +611,11 @@ const CompleteWorkspace: React.FC = () => {
         }}
       >
         {/* VIEW 0: Pure 2D Master Jacquard Design (Human & Room Removed) */}
+        {pipelineResult?.jeri_preview_url && (
+          <div hidden={mode !== 'dot_studio'} style={{ width: '100%', minWidth: 0 }}>
+            <DotStudio key={pipelineResult.jeri_preview_url} source={pipelineResult.jeri_preview_url} />
+          </div>
+        )}
         {mode === 'master_2d' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
             <div
