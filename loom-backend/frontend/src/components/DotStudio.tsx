@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { decodeDotProject, encodeDotBmp, encodeDotProject, fillDots, maxProjectDots } from '../dotBitmap';
+import { decodeDotBmp, decodeDotProject, encodeDotBmp, encodeDotProject, fillDots, maxProjectDots } from '../dotBitmap';
 
 type Tool = 'pencil' | 'eraser' | 'fill';
 type Point = { x: number; y: number };
@@ -162,7 +162,7 @@ export default function DotStudio({ source }: { source?: string }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const openProject = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const openDesign = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file || opening || stroke.current) return;
@@ -170,8 +170,10 @@ export default function DotStudio({ source }: { source?: string }) {
     setOpening(true);
     setError('');
     try {
-      if (file.size > maxProjectDots + 12) throw new Error('This project exceeds the Dot Studio size limit.');
-      const project = decodeDotProject(await file.arrayBuffer());
+      // Allow scanline padding and headers on top of the maximum dot count.
+      if (file.size > maxProjectDots + 65_536) throw new Error('This file exceeds the Dot Studio size limit.');
+      const buffer = await file.arrayBuffer();
+      const project = file.name.toLowerCase().endsWith('.bmp') ? decodeDotBmp(buffer) : decodeDotProject(buffer);
       const target = canvas.current;
       if (!target) return;
       target.width = project.width;
@@ -196,7 +198,7 @@ export default function DotStudio({ source }: { source?: string }) {
       {error && <p role="alert">{error}</p>}
       {source && !size.width && !error && <p role="status">Loading the reconstructed dots…</p>}
       {(!source || size.width > 0 || error) && (
-        <label>Open Dot Studio project <input type="file" accept=".sjd" disabled={opening} onChange={openProject} /></label>
+        <label>Open a project or black-and-white BMP <input type="file" accept=".sjd,.bmp" disabled={opening} onChange={openDesign} /></label>
       )}
       {size.width > 0 && (
         <>

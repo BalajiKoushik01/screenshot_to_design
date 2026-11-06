@@ -338,7 +338,7 @@ const App: React.FC = () => {
                       isDragActive={isDragActive}
                     />
                     <button type="button" className="btn btn-secondary" style={{ alignSelf: 'center', marginTop: 16 }}
-                      onClick={() => setOpenStudio(true)}>Open an existing Dot Studio project</button>
+                      onClick={() => setOpenStudio(true)}>Edit an existing dot BMP or project</button>
                   </>
                 )}
               </motion.div>
