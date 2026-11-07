@@ -677,12 +677,12 @@ async def download_saree_panel_redwhite_bmp(task_id: str) -> FileResponse:
 
 
 @router.get("/designs/{task_id}/download/jeri")
-async def download_jeri_bmp(task_id: str) -> FileResponse:
-    """Serve the 1-bit monochrome Zari Card Punch BMP (_jeri.bmp)."""
+async def download_jeri_bmp(task_id: str, indexed: bool = False) -> FileResponse:
+    """Serve the Zari plane as a 1-bit card or an editable 8-bit dot BMP."""
     result = _task_result(task_id)
     if result is None:
         raise HTTPException(404, detail="Task not completed or not found")
-    url = result.get("jeri_bmp_url", "")
+    url = result.get("dot_bmp_url" if indexed else "jeri_bmp_url", "")
     if not url:
         raise HTTPException(404, detail="Zari Card BMP not available")
     fpath = _exports_dir() / Path(url).name

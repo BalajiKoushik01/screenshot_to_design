@@ -103,6 +103,8 @@ def complete_regions(
     if defect_mask.shape[:2] != image.shape[:2]:
         defect_mask = cv2.resize(defect_mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
+    defect_mask = defect_mask > 0
+
     # 1. First Pass: Multi-Donor Phase-Aligned Lattice Fill on repetitive regions
     has_repeat = (repeat.confidence >= _REPEAT_THRESHOLD) and (
         (repeat.vector_x > 0 and repeat.vector_y > 0) or
@@ -111,7 +113,8 @@ def complete_regions(
 
     if has_repeat:
         result, filled_mask = _phase_aligned_consensus_fill(result, repeat, defect_mask)
-        report["tiled"].append("lattice_consensus_phase_fill")
+        if np.any(filled_mask):
+            report["tiled"].append("lattice_consensus_phase_fill")
         # Update defect mask to only target pixels that couldn't be resolved via periodicity
         remaining_defects = defect_mask & (~filled_mask)
     else:
@@ -179,8 +182,9 @@ def _phase_aligned_consensus_fill(
     if np.any(border_band):
         # Subtle bilateral smoothing on boundary seam to eliminate hard luminance steps
         smoothed = cv2.bilateralFilter(result, d=5, sigmaColor=25, sigmaSpace=25)
-        seam_zone = cv2.dilate(filled_mask.astype(np.uint8) * 255, k_blend) > 0
-        result[seam_zone] = cv2.addWeighted(result[seam_zone], 0.65, smoothed[seam_zone], 0.35, 0)
+        seam_zone = filled_mask & (cv2.dilate(border_band.astype(np.uint8), k_blend) > 0)
+        if np.any(seam_zone):
+            result[seam_zone] = cv2.addWeighted(result[seam_zone], 0.65, smoothed[seam_zone], 0.35, 0)
 
     return result, filled_mask
 

@@ -21,8 +21,11 @@ import {
 } from 'lucide-react';
 import { useLoomStore } from '../store/useLoomStore';
 import { REGION_COLORS } from '../types';
+import DotStudio from './DotStudio';
+import AssemblyStudio from './AssemblyStudio';
+import type { DotPlane } from '../sareeAssembly';
 
-type ViewMode = 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
+type ViewMode = 'assembly' | 'photo_trace' | 'dot_studio' | 'master_2d' | 'motif' | 'border' | 'tech_sheet' | 'psp' | 'jacquard' | 'comparison' | 'regions' | 'repeat' | 'colorway' | 'copilot';
 
 const triggerFileDownload = async (url: string, defaultFilename: string) => {
   try {
@@ -66,7 +69,12 @@ const CompleteWorkspace: React.FC = () => {
     pipelineResult: s.pipelineResult,
   }));
 
-  const [mode, setMode] = useState<ViewMode>('master_2d');
+  const [mode, setMode] = useState<ViewMode>(pipelineResult?.jeri_preview_url ? 'dot_studio' : 'master_2d');
+  const [assemblySeed, setAssemblySeed] = useState<DotPlane>();
+  const useInAssembly = (plane: DotPlane) => {
+    setAssemblySeed(plane);
+    setMode('assembly');
+  };
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [regionOpacity, setRegionOpacity] = useState<number>(0.65);
   const [hoveredRegionIdx, setHoveredRegionIdx] = useState<number | null>(null);
@@ -242,6 +250,25 @@ const CompleteWorkspace: React.FC = () => {
       >
         {/* Mode Selector Tabs */}
         <div style={{ display: 'flex', gap: '6px', background: 'var(--color-surface-2)', padding: '4px', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+          <button type="button"
+            className={`btn btn-sm ${mode === 'assembly' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setMode('assembly')}>
+            <Grid3X3 size={13} /> Saree Assembly
+          </button>
+          {pipelineResult?.photo_trace_url && (
+            <button type="button"
+              className={`btn btn-sm ${mode === 'photo_trace' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setMode('photo_trace')}>
+              <Eye size={13} /> Edit photo trace
+            </button>
+          )}
+          {pipelineResult?.jeri_preview_url && (
+            <button type="button"
+              className={`btn btn-sm ${mode === 'dot_studio' ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setMode('dot_studio')}>
+              <Grid3X3 size={13} /> Dot Studio
+            </button>
+          )}
           <button
             type="button"
             className={`btn btn-sm ${mode === 'master_2d' ? 'btn-primary' : 'btn-ghost'}`}
@@ -603,6 +630,30 @@ const CompleteWorkspace: React.FC = () => {
         }}
       >
         {/* VIEW 0: Pure 2D Master Jacquard Design (Human & Room Removed) */}
+        <div hidden={mode !== 'assembly'} style={{ width: '100%', minWidth: 0 }}>
+          <AssemblyStudio seed={assemblySeed} extracted={{
+            Body: pipelineResult?.body_jeri_bmp_url,
+            'Left border': pipelineResult?.border_jeri_bmp_url,
+            'Right border': pipelineResult?.border_jeri_bmp_url,
+            Pallu: pipelineResult?.pallu_jeri_bmp_url,
+          }} />
+        </div>
+        {pipelineResult?.photo_trace_url && (
+          <div hidden={mode !== 'photo_trace'} style={{ width: '100%', minWidth: 0 }}>
+            <details style={{ marginBottom: 12 }}>
+              <summary>Compare with the calibrated photo crop</summary>
+              <p>Pin the corners around one visible border or motif before processing. The trace follows visible contrast and may include folds or shadows.</p>
+              <img src={pipelineResult.photo_reference_url} alt="Calibrated photo crop"
+                style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }} />
+            </details>
+            <DotStudio key={pipelineResult.photo_trace_url} source={pipelineResult.photo_trace_url} onApply={useInAssembly} />
+          </div>
+        )}
+        {pipelineResult?.jeri_preview_url && (
+          <div hidden={mode !== 'dot_studio'} style={{ width: '100%', minWidth: 0 }}>
+            <DotStudio key={pipelineResult.jeri_preview_url} source={pipelineResult.jeri_preview_url} onApply={useInAssembly} />
+          </div>
+        )}
         {mode === 'master_2d' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
             <div
