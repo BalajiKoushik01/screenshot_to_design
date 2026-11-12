@@ -31,16 +31,30 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 def _save_upload(upload: UploadFile, folder: Path) -> Path:
-    """Write UploadFile to folder with a UUID filename."""
+    """Validate image uploads and stream to disk with a bounded size."""
+    allowed_extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix not in allowed_extensions:
+        raise HTTPException(status_code=415, detail="Unsupported image format")
+    max_bytes = 20 * 1024 * 1024
     folder.mkdir(parents=True, exist_ok=True)
-    suffix   = Path(upload.filename or "file").suffix or ".bin"
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    dest     = folder / filename
-    with dest.open("wb") as f:
-        while chunk := upload.file.read(1024 * 1024):
-            f.write(chunk)
-    upload.file.close()
-    return dest
+    destination = folder / f"{uuid.uuid4().hex}{suffix}"
+    written = 0
+    try:
+        with destination.open("wb") as output:
+            while chunk := upload.file.read(1024 * 1024):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(status_code=413, detail="Image exceeds 20 MB limit")
+                output.write(chunk)
+        if written == 0:
+            raise HTTPException(status_code=400, detail="Image file is empty")
+        return destination
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        upload.file.close()
 
 
 def _tmp_dir() -> Path:
@@ -221,23 +235,43 @@ async def upload_design(
 
     try:
         image_path = _save_upload(image, tmp)
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(500, detail=f"Failed to save image: {exc}")
+        raise HTTPException(500, detail="Image could not be stored") from exc
 
     mask_path = ""
     if mask is not None:
         try:
             mask_path = str(_save_upload(mask, tmp))
+        except HTTPException:
+            raise
         except Exception as exc:
-            raise HTTPException(500, detail=f"Failed to save mask: {exc}")
+            raise HTTPException(500, detail="Mask could not be stored") from exc
 
     # Parse coordinates — accept JSON array or Python literal
     try:
         coords = json.loads(coordinates)
     except json.JSONDecodeError:
-        coords = ast.literal_eval(coordinates)
-    if not isinstance(coords, list) or len(coords) != 4:
-        raise HTTPException(422, detail="coordinates must be a list of exactly four points")
+        try:
+            coords = ast.literal_eval(coordinates)
+        except (SyntaxError, ValueError, TypeError) as exc:
+            raise HTTPException(422, detail="coordinates must be a valid list of four points") from exc
+    if (
+        not isinstance(coords, list)
+        or len(coords) != 4
+        or any(
+            not isinstance(point, (list, tuple))
+            or len(point) != 2
+            or any(not isinstance(value, (int, float)) or isinstance(value, bool) for value in point)
+            for point in coords
+        )
+    ):
+        raise HTTPException(422, detail="coordinates must be a list of four numeric [x, y] points")
+    if not 2 <= color_count <= 256:
+        raise HTTPException(422, detail="color_count must be between 2 and 256")
+    if not 16 <= target_width <= 20000:
+        raise HTTPException(422, detail="target_width must be between 16 and 20000")
 
     task_id = str(uuid.uuid4())
     dispatched_celery = False
