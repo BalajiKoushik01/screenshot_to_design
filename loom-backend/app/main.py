@@ -1,9 +1,11 @@
 import os
+import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from uuid import uuid4
 
 from app.core.config import Settings
 from app.api.v1.endpoints import router as v1_router
@@ -19,15 +21,21 @@ app = FastAPI(
     description=settings.description,
 )
 
-# -------------------------------------------------
-# CORS – allow all origins during development
-# -------------------------------------------------
+# Explicit browser origins only. Cross-origin requests are not authenticated here.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip() and origin.strip() != "*"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # noqa: W605 – wildcard for dev only
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # -------------------------------------------------
@@ -35,14 +43,14 @@ app.add_middleware(
 # -------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Return a consistent JSON payload for any uncaught exception.
-
-    The response contains the HTTP 500 status code, a human‑readable
-    ``detail`` message and the exception class name for easier debugging.
-    """
+    """Log internal errors without disclosing paths, credentials or traces to clients."""
+    error_id = uuid4().hex
+    logging.getLogger("weavecore.api").exception(
+        "Request failed error_id=%s path=%s", error_id, request.url.path
+    )
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc), "type": exc.__class__.__name__},
+        content={"detail": "Internal server error", "error_id": error_id},
     )
 
 # -------------------------------------------------

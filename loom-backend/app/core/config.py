@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     """Application configuration settings."""
 
     app_name: str = "Loom Backend"
-    debug: bool = True
+    debug: bool = False
     version: str = "0.1.0"
     description: str = "FastAPI service for Loom image processing"
 

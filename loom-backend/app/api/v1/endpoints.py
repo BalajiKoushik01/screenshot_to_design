@@ -31,16 +31,30 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 def _save_upload(upload: UploadFile, folder: Path) -> Path:
-    """Write UploadFile to folder with a UUID filename."""
+    """Validate image uploads and stream to disk with a bounded size."""
+    allowed_extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix not in allowed_extensions:
+        raise HTTPException(status_code=415, detail="Unsupported image format")
+    max_bytes = 20 * 1024 * 1024
     folder.mkdir(parents=True, exist_ok=True)
-    suffix   = Path(upload.filename or "file").suffix or ".bin"
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    dest     = folder / filename
-    with dest.open("wb") as f:
-        while chunk := upload.file.read(1024 * 1024):
-            f.write(chunk)
-    upload.file.close()
-    return dest
+    destination = folder / f"{uuid.uuid4().hex}{suffix}"
+    written = 0
+    try:
+        with destination.open("wb") as output:
+            while chunk := upload.file.read(1024 * 1024):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(status_code=413, detail="Image exceeds 20 MB limit")
+                output.write(chunk)
+        if written == 0:
+            raise HTTPException(status_code=400, detail="Image file is empty")
+        return destination
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        upload.file.close()
 
 
 def _tmp_dir() -> Path:
