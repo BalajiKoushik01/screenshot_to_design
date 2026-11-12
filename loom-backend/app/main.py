@@ -100,8 +100,8 @@ if dist_dir:
         # Do not hijack API or static routes
         if full_path.startswith("api/") or full_path.startswith("static/"):
             return JSONResponse(status_code=404, content={"detail": "Not Found"})
-        file_path = dist_dir / full_path
-        if file_path.is_file():
+        file_path = (dist_dir / full_path).resolve()
+        if file_path.is_relative_to(dist_dir.resolve()) and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(dist_dir / "index.html")
 
