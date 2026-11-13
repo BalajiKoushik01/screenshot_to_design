@@ -2,7 +2,7 @@ name: Backend syntax and frontend build
 on:
   pull_request:
   push:
-    branches: ["fix/**"]
+    branches: [main, "fix/**"]
 jobs:
   backend-syntax:
     runs-on: ubuntu-latest
@@ -13,6 +13,8 @@ jobs:
           python-version: "3.11"
       - name: Compile Python sources
         run: python -m compileall -q loom-backend/app
+      - name: Validate upload form parameters
+        run: cd loom-backend && python -m unittest discover -s tests -p "test_*.py" -v
   frontend-build:
     runs-on: ubuntu-latest
     defaults:
