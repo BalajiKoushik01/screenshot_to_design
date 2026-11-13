@@ -6,7 +6,7 @@ The in-process pipeline fallback previously overwrote a shared Celery task's pro
 
 ## Credentials
 
-The `POST /api/v1/designs/cloud-ai/configure` endpoint previously accepted arbitrary provider keys from unauthenticated callers and mutated server environment variables. It now returns 403 by default. Set credentials in the process's secure server environment instead. The explicit `ALLOW_UNSAFE_RUNTIME_CREDENTIAL_CONFIG=1` override is only for isolated, trusted local experiments and **must never be enabled on a public deployment**. Remove the endpoint entirely when replacing it with a managed secrets workflow.
+The `POST /api/v1/designs/cloud-ai/configure` endpoint previously accepted arbitrary provider keys from unauthenticated callers and mutated server environment variables. The route has now been removed entirely rather than preserving an unsafe developer override. Set credentials in protected server environment settings instead. The frontend no longer stores provider keys in localStorage or accepts credential input.
 
 ## Still required before public SaaS release
 

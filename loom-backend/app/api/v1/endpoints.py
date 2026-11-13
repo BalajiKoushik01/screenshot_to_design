@@ -1092,13 +1092,6 @@ async def ai_chat(task_id: str, req: AiChatRequest) -> JSONResponse:
     return JSONResponse(content=ans_data)
 
 
-class CloudAiConfigRequest(BaseModel):
-    gemini_api_key: Optional[str] = None
-    hf_token: Optional[str] = None
-    groq_api_key: Optional[str] = None
-    model_name: Optional[str] = "gemini-1.5-flash"
-
-
 @router.get("/designs/cloud-ai/status")
 async def get_cloud_ai_status() -> JSONResponse:
     """Return status of Cloud AI Agent integration."""
@@ -1106,13 +1099,13 @@ async def get_cloud_ai_status() -> JSONResponse:
     has_hf = bool(os.environ.get("HF_API_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN"))
     has_groq = bool(os.environ.get("GROQ_API_KEY"))
 
-    active_provider = "Autonomous Cloud-Calibrated Textile Vision Engine (0 Config, 100% Free)"
+    active_provider = "Local analysis (provider not configured)"
     if has_gemini:
-        active_provider = "Google Gemini Cloud Vision (100% Free Tier, 15 RPM)"
+        active_provider = "Google Gemini (configured)"
     elif has_hf:
-        active_provider = "Hugging Face Serverless Cloud API (Qwen-2.5-VL-7B)"
+        active_provider = "Hugging Face (configured)"
     elif has_groq:
-        active_provider = "Groq Cloud Vision (Llama-3.2-11B-Vision)"
+        active_provider = "Groq (configured)"
 
     return JSONResponse(content={
         "status": "ready",
@@ -1124,31 +1117,11 @@ async def get_cloud_ai_status() -> JSONResponse:
         "local_storage_used_bytes": 0,
         "local_gpu_used": False,
         "supported_providers": [
-            {"name": "Google Gemini 1.5/2.0 Flash", "tier": "100% Free (15 RPM)", "best_for": "Fine texture & complex motifs"},
-            {"name": "Hugging Face Serverless", "tier": "100% Free Serverless", "best_for": "Open-source Qwen2.5-VL"},
-            {"name": "Groq Cloud Vision", "tier": "100% Free Tier", "best_for": "High-speed Llama-3.2-Vision"},
-            {"name": "Autonomous Cloud Textile Heuristics", "tier": "Built-in / Zero Config", "best_for": "Immediate offline-ready analysis"}
+            {"name": "Google Gemini", "tier": "Provider account required", "best_for": "Image understanding experiments"},
+            {"name": "Hugging Face", "tier": "Provider account required", "best_for": "Hosted-model experiments"},
+            {"name": "Groq", "tier": "Provider account required", "best_for": "Supported model inference"},
+            {"name": "Local analysis", "tier": "Runs on host resources", "best_for": "Local experimental processing"}
         ]
     })
 
-
-@router.post("/designs/cloud-ai/configure")
-async def configure_cloud_ai(req: CloudAiConfigRequest) -> JSONResponse:
-    """Disabled by default: never accept unauthenticated API credentials over HTTP."""
-    if os.environ.get("ALLOW_UNSAFE_RUNTIME_CREDENTIAL_CONFIG") != "1":
-        raise HTTPException(status_code=403, detail="Runtime API key configuration is disabled; configure server environment secrets")
-    # Only use this opt-in for isolated, trusted local development. Not safe on a public server.
-    if req.gemini_api_key is not None:
-        os.environ["GEMINI_API_KEY"] = req.gemini_api_key.strip()
-    if req.hf_token is not None:
-        os.environ["HF_API_TOKEN"] = req.hf_token.strip()
-    if req.groq_api_key is not None:
-        os.environ["GROQ_API_KEY"] = req.groq_api_key.strip()
-
-    return JSONResponse(content={
-        "message": "Cloud AI credentials updated successfully",
-        "has_gemini_key": bool(os.environ.get("GEMINI_API_KEY")),
-        "has_hf_token": bool(os.environ.get("HF_API_TOKEN")),
-        "has_groq_key": bool(os.environ.get("GROQ_API_KEY")),
-    })
 
