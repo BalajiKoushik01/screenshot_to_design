@@ -13,6 +13,7 @@ New endpoints (FR-5, FR-11):
 """
 import ast
 import json
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -23,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Uploa
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.worker import process_textile_design_task, celery_app
+from app.core.upload_validation import parse_pattern_parameters
 
 router = APIRouter()
 
@@ -74,6 +76,7 @@ import threading
 
 _task_store: Dict[str, Dict[str, Any]] = {}
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+_pipeline_lock = threading.Lock()  # Protect shared Celery task progress callback in local fallback.
 
 def _get_task_store_file() -> Path:
     return _tmp_dir() / "task_store.json"
@@ -128,28 +131,32 @@ def _run_pipeline_worker(
                 for k, v in meta.items():
                     _task_store[task_id][k] = v
 
-    original_update_state = getattr(process_textile_design_task, "update_state", None)
-    process_textile_design_task.update_state = update_state  # type: ignore[assignment]
-    try:
-        result = process_textile_design_task.run(
-            image_path=image_path,
-            mask_path=mask_path,
-            coordinates=coordinates,
-            colors=colors,
-            width=width,
-        )
-        _task_store[task_id]["status"] = "SUCCESS"
-        _task_store[task_id]["result"] = result
-        _task_store[task_id]["stage"] = "Pipeline complete"
-        _task_store[task_id]["progress"] = 100
-        _save_task_store()
-    except Exception as exc:
-        _task_store[task_id]["status"] = "FAILURE"
-        _task_store[task_id]["error"] = str(exc)
-        _save_task_store()
-    finally:
-        if original_update_state:
-            process_textile_design_task.update_state = original_update_state  # type: ignore[assignment]
+    with _pipeline_lock:
+        original_update_state = getattr(process_textile_design_task, "update_state", None)
+        process_textile_design_task.update_state = update_state  # type: ignore[assignment]
+        try:
+            result = process_textile_design_task.run(
+                image_path=image_path,
+                mask_path=mask_path,
+                coordinates=coordinates,
+                colors=colors,
+                width=width,
+            )
+            _task_store[task_id]["status"] = "SUCCESS"
+            _task_store[task_id]["result"] = result
+            _task_store[task_id]["stage"] = "Pipeline complete"
+            _task_store[task_id]["progress"] = 100
+            _save_task_store()
+        except Exception:
+            logging.getLogger("weavecore.pipeline").exception("Local pipeline failed for task %s", task_id)
+            _task_store[task_id]["status"] = "FAILURE"
+            _task_store[task_id]["error"] = "Pattern extraction failed; check server logs"
+            _save_task_store()
+        finally:
+            if original_update_state is not None:
+                process_textile_design_task.update_state = original_update_state  # type: ignore[assignment]
+            else:
+                delattr(process_textile_design_task, "update_state")
 
 
 def _enrich_result(res: Any) -> Any:
@@ -231,8 +238,13 @@ async def upload_design(
 
     Returns ``202 Accepted`` with a ``task_id`` to poll via ``/designs/status/{id}``.
     """
-    tmp = _tmp_dir()
+    # Reject malformed design parameters before persisting uploaded media.
+    try:
+        coords = parse_pattern_parameters(coordinates, color_count, target_width)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    tmp = _tmp_dir()
     try:
         image_path = _save_upload(image, tmp)
     except HTTPException:
@@ -244,34 +256,11 @@ async def upload_design(
     if mask is not None:
         try:
             mask_path = str(_save_upload(mask, tmp))
-        except HTTPException:
-            raise
         except Exception as exc:
+            image_path.unlink(missing_ok=True)
+            if isinstance(exc, HTTPException):
+                raise
             raise HTTPException(500, detail="Mask could not be stored") from exc
-
-    # Parse coordinates — accept JSON array or Python literal
-    try:
-        coords = json.loads(coordinates)
-    except json.JSONDecodeError:
-        try:
-            coords = ast.literal_eval(coordinates)
-        except (SyntaxError, ValueError, TypeError) as exc:
-            raise HTTPException(422, detail="coordinates must be a valid list of four points") from exc
-    if (
-        not isinstance(coords, list)
-        or len(coords) != 4
-        or any(
-            not isinstance(point, (list, tuple))
-            or len(point) != 2
-            or any(not isinstance(value, (int, float)) or isinstance(value, bool) for value in point)
-            for point in coords
-        )
-    ):
-        raise HTTPException(422, detail="coordinates must be a list of four numeric [x, y] points")
-    if not 2 <= color_count <= 256:
-        raise HTTPException(422, detail="color_count must be between 2 and 256")
-    if not 16 <= target_width <= 20000:
-        raise HTTPException(422, detail="target_width must be between 16 and 20000")
 
     task_id = str(uuid.uuid4())
     dispatched_celery = False
@@ -345,7 +334,7 @@ async def get_design_status(task_id: str) -> JSONResponse:
             return JSONResponse(content={"status": status, "result": _enrich_result(dict(ar.result))})
 
         if status == "FAILURE":
-            return JSONResponse(content={"status": status, "error": str(ar.result)})
+            return JSONResponse(content={"status": status, "error": "Pattern extraction failed; check server logs"})
 
         if status == "STARTED":
             meta = ar.info or {}
@@ -1103,13 +1092,6 @@ async def ai_chat(task_id: str, req: AiChatRequest) -> JSONResponse:
     return JSONResponse(content=ans_data)
 
 
-class CloudAiConfigRequest(BaseModel):
-    gemini_api_key: Optional[str] = None
-    hf_token: Optional[str] = None
-    groq_api_key: Optional[str] = None
-    model_name: Optional[str] = "gemini-1.5-flash"
-
-
 @router.get("/designs/cloud-ai/status")
 async def get_cloud_ai_status() -> JSONResponse:
     """Return status of Cloud AI Agent integration."""
@@ -1117,13 +1099,13 @@ async def get_cloud_ai_status() -> JSONResponse:
     has_hf = bool(os.environ.get("HF_API_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN"))
     has_groq = bool(os.environ.get("GROQ_API_KEY"))
 
-    active_provider = "Autonomous Cloud-Calibrated Textile Vision Engine (0 Config, 100% Free)"
+    active_provider = "Local analysis (provider not configured)"
     if has_gemini:
-        active_provider = "Google Gemini Cloud Vision (100% Free Tier, 15 RPM)"
+        active_provider = "Google Gemini (configured)"
     elif has_hf:
-        active_provider = "Hugging Face Serverless Cloud API (Qwen-2.5-VL-7B)"
+        active_provider = "Hugging Face (configured)"
     elif has_groq:
-        active_provider = "Groq Cloud Vision (Llama-3.2-11B-Vision)"
+        active_provider = "Groq (configured)"
 
     return JSONResponse(content={
         "status": "ready",
@@ -1135,28 +1117,11 @@ async def get_cloud_ai_status() -> JSONResponse:
         "local_storage_used_bytes": 0,
         "local_gpu_used": False,
         "supported_providers": [
-            {"name": "Google Gemini 1.5/2.0 Flash", "tier": "100% Free (15 RPM)", "best_for": "Fine texture & complex motifs"},
-            {"name": "Hugging Face Serverless", "tier": "100% Free Serverless", "best_for": "Open-source Qwen2.5-VL"},
-            {"name": "Groq Cloud Vision", "tier": "100% Free Tier", "best_for": "High-speed Llama-3.2-Vision"},
-            {"name": "Autonomous Cloud Textile Heuristics", "tier": "Built-in / Zero Config", "best_for": "Immediate offline-ready analysis"}
+            {"name": "Google Gemini", "tier": "Provider account required", "best_for": "Image understanding experiments"},
+            {"name": "Hugging Face", "tier": "Provider account required", "best_for": "Hosted-model experiments"},
+            {"name": "Groq", "tier": "Provider account required", "best_for": "Supported model inference"},
+            {"name": "Local analysis", "tier": "Runs on host resources", "best_for": "Local experimental processing"}
         ]
     })
 
-
-@router.post("/designs/cloud-ai/configure")
-async def configure_cloud_ai(req: CloudAiConfigRequest) -> JSONResponse:
-    """Save or update Cloud AI credentials in process environment."""
-    if req.gemini_api_key is not None:
-        os.environ["GEMINI_API_KEY"] = req.gemini_api_key.strip()
-    if req.hf_token is not None:
-        os.environ["HF_API_TOKEN"] = req.hf_token.strip()
-    if req.groq_api_key is not None:
-        os.environ["GROQ_API_KEY"] = req.groq_api_key.strip()
-
-    return JSONResponse(content={
-        "message": "Cloud AI credentials updated successfully",
-        "has_gemini_key": bool(os.environ.get("GEMINI_API_KEY")),
-        "has_hf_token": bool(os.environ.get("HF_API_TOKEN")),
-        "has_groq_key": bool(os.environ.get("GROQ_API_KEY")),
-    })
 

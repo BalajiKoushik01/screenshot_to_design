@@ -85,10 +85,7 @@ const CompleteWorkspace: React.FC = () => {
   const [pspZoom, setPspZoom] = useState<number>(4); // 1, 2, 4, 8, 16
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
   const [showCloudAiModal, setShowCloudAiModal] = useState<boolean>(false);
-  const [hfToken, setHfToken] = useState<string>(() => localStorage.getItem('hf_token') || '');
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
-  const [aiConfigSaving, setAiConfigSaving] = useState<boolean>(false);
-  const [aiConfigSuccess, setAiConfigSuccess] = useState<boolean>(false);
+
 
   // Colorway Studio state
   const [cwGround, setCwGround] = useState<string>('#0B2559');
@@ -2112,98 +2109,12 @@ const CompleteWorkspace: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Cloud Credentials Configuration */}
+                {/* Cloud credentials are configured by the server operator, never in the browser. */}
                 <div style={{ marginBottom: '20px', padding: '14px', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '10px', color: '#e2e8f0' }}>
-                    Cloud AI Vision Credentials (Both are 100% Free with zero local machine storage):
-                  </div>
-
-                  {/* Gemini Free Key */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                      Google Gemini API Key (Recommended · 100% Free · 15 RPM · No credit card required):
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="AIzaSy... (Get free key at aistudio.google.com)"
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(0, 0, 0, 0.3)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                        color: '#fff',
-                        marginBottom: '4px',
-                      }}
-                    />
-                    <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                      Get your free key in 10 seconds at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>aistudio.google.com</a>
-                    </div>
-                  </div>
-
-                  {/* Hugging Face Token */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '4px' }}>
-                      Hugging Face Free Token (Optional · For Qwen-2.5-VL-7B Serverless):
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="hf_xxxxxxxxxxxxxxxxxxxx (Optional)"
-                      value={hfToken}
-                      onChange={(e) => setHfToken(e.target.value)}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(0, 0, 0, 0.3)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                        color: '#fff',
-                        marginBottom: '4px',
-                      }}
-                    />
-                    <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                      Available at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>huggingface.co/settings/tokens</a>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      disabled={aiConfigSaving}
-                      onClick={async () => {
-                        setAiConfigSaving(true);
-                        localStorage.setItem('hf_token', hfToken);
-                        localStorage.setItem('gemini_api_key', geminiApiKey);
-                        try {
-                          await axios.post('/api/v1/designs/cloud-ai/configure', {
-                            hf_token: hfToken || null,
-                            gemini_api_key: geminiApiKey || null,
-                          });
-                          setAiConfigSuccess(true);
-                          setTimeout(() => setAiConfigSuccess(false), 3500);
-                        } catch (e) {
-                          console.error(e);
-                        } finally {
-                          setAiConfigSaving(false);
-                        }
-                      }}
-                    >
-                      {aiConfigSaving ? 'Saving...' : '💾 Save Cloud AI Credentials'}
-                    </button>
-                    {aiConfigSuccess && (
-                      <span style={{ fontSize: '11px', color: '#4ade80' }}>
-                        ✓ Cloud credentials updated successfully!
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '8px' }}>
-                    * Even with no API key provided, the autonomous cloud-calibrated textile vision engine runs immediately with zero local compute or downloads.
-                  </div>
+                  <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', marginBottom: '8px' }}>Cloud AI configuration</h3>
+                  <p style={{ fontSize: '12px', lineHeight: 1.6, color: 'var(--color-text-muted)' }}>
+                    Cloud AI is configured by the workspace administrator using protected server environment settings. Do not paste API keys into this website or browser storage. Availability depends on the connected provider and account.
+                  </p>
                 </div>
 
                 {/* Structured Textile Understanding Cards */}

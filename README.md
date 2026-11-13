@@ -43,7 +43,7 @@ npm run dev
 
 On Windows, copy `.env.example` to `.env` manually. The example sets `VITE_API_BASE_URL=http://127.0.0.1:8000`.
 
-The backend may need Redis, additional AI model files or provider configuration for asynchronous processing and optional stages. The API docs are available at `http://127.0.0.1:8000/docs` when the backend starts.
+When Redis is unavailable, the backend falls back to a local thread executor. That fallback serializes the shared pipeline progress callback and is not durable or multi-tenant safe. Additional AI models or provider configuration may be needed for optional stages. The API docs are available at `http://127.0.0.1:8000/docs` when the backend starts.
 
 ## Development expectations
 
@@ -51,7 +51,7 @@ The design documents are specifications, **not test evidence**. Assess extractio
 
 ### Not production hardened
 
-At the time of this documentation review, the FastAPI app allowed wildcard CORS in its development configuration and included exception text in its generic 500 response. Do not expose it publicly without origin restrictions, safe error handling, authentication where needed, file-size limits and storage controls. Uploaded images may be copyrighted or confidential; only process material you have permission to use.
+The API currently restricts browser origins, limits the size of file uploads, and returns generic unexpected-error responses. It still lacks authentication, per-user job isolation, verified image decoding, access-controlled exports, rate limiting and durable local fallback jobs. The credential configuration route is now disabled by default; operators should use server-side environment secrets. Do not deploy publicly until these controls are in place. Uploaded images may be copyrighted or confidential; only process material you have permission to use.
 
 ## Useful design references
 
