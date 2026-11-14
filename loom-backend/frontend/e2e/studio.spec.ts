@@ -1,0 +1,58 @@
+import { test, expect } from '@playwright/test';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+const sample = path.resolve('../../sample output/05    Body  480+480    Boder    576   100  Reed.BMP');
+
+test('extract, edit, undo, save, reopen, and export without losing palette indices', async ({ page }, info) => {
+  const exceptions: string[] = [];
+  page.on('pageerror', e => exceptions.push(e.message));
+  await page.goto('/');
+  await page.locator('input[type=file]').setInputFiles(sample);
+  await expect(page.getByLabel('Output columns')).toHaveValue('240');
+  await expect(page.getByLabel('Output rows')).toHaveValue('1536');
+  await page.getByRole('button', { name: 'Extract editable design', exact: true }).click();
+  await expect(page.getByLabel('Editable indexed design')).toBeVisible();
+  const downloadProject = async (filename: string) => {
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: /Save editable project/ }).click();
+    const file = info.outputPath(filename); await (await pending).saveAs(file);
+    return { file, data: JSON.parse(await fs.readFile(file, 'utf8')) };
+  };
+  const before = await downloadProject('before.json');
+  await page.getByRole('button', { name: 'Palette index 1', exact: true }).click();
+  const canvas = page.getByLabel('Editable indexed design');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  // Canvas can be much taller than its scroll container: paint near the visible top.
+  const area = (await page.locator('.canvas-scroll').boundingBox())!;
+  const x = Math.max(box.x, area.x) + 20, y = Math.max(box.y, area.y) + 25;
+  expect(y).toBeLessThan(viewport.height);
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 40, y + 10, { steps: 5 }); await page.mouse.up();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  const restored = await downloadProject('restored.json');
+  expect(restored.data.indices).toBe(before.data.indices);
+  expect(restored.data.palette).toEqual(before.data.palette);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await page.locator('input[type=file]').setInputFiles(before.file);
+  await expect(page.getByRole('status')).toContainText('Project opened');
+  const bmpDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export indexed BMP', exact: true }).click();
+  const bmpFile = info.outputPath('design.bmp'); await (await bmpDownload).saveAs(bmpFile);
+  const bytes = await fs.readFile(bmpFile);
+  expect(bytes.readUInt16LE(28)).toBe(8);
+  const w = bytes.readInt32LE(18), h = bytes.readInt32LE(22), offset = bytes.readUInt32LE(10), stride = (w + 3) & ~3;
+  const raw = Buffer.alloc(w * h);
+  for (let y = 0; y < h; y++) bytes.copy(raw, y * w, offset + (h - 1 - y) * stride, offset + (h - 1 - y) * stride + w);
+  expect(raw.toString('base64')).toBe(before.data.indices);
+  await page.getByLabel('Required export width (0 = any)').fill('1');
+  await page.getByRole('button', { name: 'Export indexed BMP', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('will not silently resize');
+  await page.getByRole('button', { name: 'Show 3 × 3 preview', exact: true }).click();
+  await expect(page.locator('.repeat-preview canvas')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('studio-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('studio-mobile.png'), fullPage: true });
+  expect(exceptions).toEqual([]);
+});

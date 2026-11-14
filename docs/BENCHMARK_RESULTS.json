@@ -1,0 +1,185 @@
+{
+  "description": "Known-grid 2x screenshot with UI margin; JPEG quality 85 is intentionally lossy.",
+  "results": [
+    {
+      "sample": "05    Body  480+480    Boder    576   100  Reed.BMP",
+      "case": "PNG",
+      "width": 240,
+      "height": 1536,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.702
+    },
+    {
+      "sample": "05    Body  480+480    Boder    576   100  Reed.BMP",
+      "case": "JPEG",
+      "width": 240,
+      "height": 1536,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 9.6315,
+      "seconds": 0.199
+    },
+    {
+      "sample": "06     Boder    456   100  Reed   420 + 240  +420.BMP",
+      "case": "PNG",
+      "width": 180,
+      "height": 1536,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.524
+    },
+    {
+      "sample": "06     Boder    456   100  Reed   420 + 240  +420.BMP",
+      "case": "JPEG",
+      "width": 180,
+      "height": 1536,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 13.559,
+      "seconds": 0.119
+    },
+    {
+      "sample": "480 broket ani m2.bmp",
+      "case": "PNG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.191
+    },
+    {
+      "sample": "480 broket ani m2.bmp",
+      "case": "JPEG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 1.5,
+      "seconds": 0.028
+    },
+    {
+      "sample": "480 broket ani m4.bmp",
+      "case": "PNG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.183
+    },
+    {
+      "sample": "480 broket ani m4.bmp",
+      "case": "JPEG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 1.5,
+      "seconds": 0.027
+    },
+    {
+      "sample": "480 broket ani m5.bmp",
+      "case": "PNG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.171
+    },
+    {
+      "sample": "480 broket ani m5.bmp",
+      "case": "JPEG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 1.5,
+      "seconds": 0.032
+    },
+    {
+      "sample": "480 broket ani m6.bmp",
+      "case": "PNG",
+      "width": 360,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.228
+    },
+    {
+      "sample": "480 broket ani m6.bmp",
+      "case": "JPEG",
+      "width": 360,
+      "height": 480,
+      "rgb_exact_pixel_percent": 0.0,
+      "rgb_mae": 1.5,
+      "seconds": 0.028
+    },
+    {
+      "sample": "480 broket jeri m3.bmp",
+      "case": "PNG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.147
+    },
+    {
+      "sample": "480 broket jeri m3.bmp",
+      "case": "JPEG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 84.3889,
+      "rgb_mae": 26.2267,
+      "seconds": 0.028
+    },
+    {
+      "sample": "480 broket jeri m4.bmp",
+      "case": "PNG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.142
+    },
+    {
+      "sample": "480 broket jeri m4.bmp",
+      "case": "JPEG",
+      "width": 240,
+      "height": 480,
+      "rgb_exact_pixel_percent": 80.7049,
+      "rgb_mae": 19.4881,
+      "seconds": 0.025
+    },
+    {
+      "sample": "480 broket jeri m6.bmp",
+      "case": "PNG",
+      "width": 360,
+      "height": 480,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.319
+    },
+    {
+      "sample": "480 broket jeri m6.bmp",
+      "case": "JPEG",
+      "width": 360,
+      "height": 480,
+      "rgb_exact_pixel_percent": 70.6343,
+      "rgb_mae": 30.2467,
+      "seconds": 0.044
+    },
+    {
+      "sample": "540 border jeri 4.bmp",
+      "case": "PNG",
+      "width": 360,
+      "height": 540,
+      "rgb_exact_pixel_percent": 100.0,
+      "rgb_mae": 0.0,
+      "seconds": 0.316
+    },
+    {
+      "sample": "540 border jeri 4.bmp",
+      "case": "JPEG",
+      "width": 360,
+      "height": 540,
+      "rgb_exact_pixel_percent": 76.8714,
+      "rgb_mae": 21.047,
+      "seconds": 0.043
+    }
+  ]
+}

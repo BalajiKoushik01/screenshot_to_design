@@ -76,3 +76,7 @@ yarn-debug.log*
 yarn-error.log*
 loom-backend/frontend/node_modules/
 loom-backend/frontend/dist/
+
+# Browser verification artifacts
+loom-backend/frontend/test-results/
+loom-backend/frontend/playwright-report/
