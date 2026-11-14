@@ -39,10 +39,14 @@ The resource list informs architecture, not a claim that those products or paper
 
 ## Implemented architecture
 
-```
-Image upload → bounded decode → crop/rectify/resize → preserve or reduce palette
-             → {width, height, palette, byte indices, regions, provenance}
-             → indexed editor → versioned project / indexed BMP / preview PNG
+```mermaid
+flowchart TD
+  A[Validated reference] --> B[Crop and sample grid]
+  B --> C[Preserve or reduce palette]
+  C --> D[Indexed editor]
+  D --> E[Editable project]
+  D --> F[Indexed BMP]
+  D --> G[PNG preview]
 ```
 
 The pixel matrix is authoritative. Palette recoloring never recomputes that matrix. Duplicate-color palette entries remain distinct. Flood fill operates on indices, not approximate RGB values. Export writes the current index bytes directly; it never requantizes a canvas screenshot.

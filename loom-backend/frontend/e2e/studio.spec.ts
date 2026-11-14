@@ -19,6 +19,7 @@ test('extract, edit, undo, save, reopen, and export without losing palette indic
     return { file, data: JSON.parse(await fs.readFile(file, 'utf8')) };
   };
   const before = await downloadProject('before.json');
+  await page.getByLabel('Show unused slots').check();
   await page.getByRole('button', { name: 'Palette index 1', exact: true }).click();
   const canvas = page.getByLabel('Editable indexed design');
   await canvas.scrollIntoViewIfNeeded();
@@ -50,6 +51,11 @@ test('extract, edit, undo, save, reopen, and export without losing palette indic
   await expect(page.getByRole('alert')).toContainText('will not silently resize');
   await page.getByRole('button', { name: 'Show 3 × 3 preview', exact: true }).click();
   await expect(page.locator('.repeat-preview canvas')).toBeVisible();
+  await page.getByLabel('Required export width (0 = any)').fill('240');
+  const verified = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export indexed BMP', exact: true }).click();
+  await verified;
+  await page.getByLabel('Show unused slots').uncheck();
   await page.screenshot({ path: info.outputPath('studio-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
