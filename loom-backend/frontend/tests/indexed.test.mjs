@@ -58,3 +58,11 @@ test('mirror, half-drop and brick translate palette indices by tile parity', () 
   assert.deepEqual([...m.tile(sample(), 2, 1, 'half-drop').pixels], [0, 1, 2, 2, 1, 0, 2, 1, 0, 0, 1, 2]);
   assert.deepEqual([...m.tile(sample(), 1, 2, 'brick').pixels], [0, 1, 2, 2, 1, 0, 1, 2, 0, 1, 0, 2]);
 });
+test('imported motifs require explicit mapping and keep the selected ground transparent', () => {
+  const design = sample();
+  const motif = m.crop(design, { name: 'Motif', x: 1, y: 0, width: 2, height: 1 });
+  const imported = m.fromJSON(m.serialize(motif));
+  assert.throws(() => m.pasteMotif(design, imported, 0, 0, null, new Map([[1, 0]])), /index 2/);
+  assert.deepEqual([...m.pasteMotif(design, imported, 0, 0, 1, new Map([[2, 0]])).pixels], [0, 0, 2, 2, 1, 0]);
+  assert.deepEqual([...m.pasteMotif(design, imported, 0, 0, null, new Map([[1, 2], [2, 1]])).pixels], [2, 1, 2, 2, 1, 0]);
+});

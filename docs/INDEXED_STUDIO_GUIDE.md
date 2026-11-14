@@ -49,3 +49,5 @@ To replace pixels without changing the palette table, choose the source swatch a
 Choose the repeat layout under **Panels & repeats**. The preview and built artwork use the same straight, mirrored, half-drop or half-brick arrangement. Half offsets round down when the tile dimension is odd.
 
 See the [designer workflow audit](DESIGNER_WORKFLOW_AUDIT.md) for requirements and outstanding gaps.
+
+To reuse a motif across projects, copy a selection and choose **Save motif file**. In the destination project, choose **Open saved motif**, set the coordinates, and map each used source index to a destination slot. Choose an optional transparent source index to retain the destination beneath it. Mapping is explicit even when two palette entries have identical colors.

@@ -22,6 +22,9 @@ export default function Studio() {
   const [zoom, setZoom] = useState(1), [grid, setGrid] = useState(true), [repeat, setRepeat] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('straight');
   const [motif, setMotif] = useState<Design | null>(null);
+  const [motifMapping, setMotifMapping] = useState<Map<number, number> | null>(null);
+  const [motifGround, setMotifGround] = useState(-1);
+  const motifIndices = useMemo(() => motif ? [...new Set(motif.pixels)].sort((a, b) => a - b) : [], [motif]);
   const [pasteX, setPasteX] = useState(0);
   const [pasteY, setPasteY] = useState(0);
   const [transparent, setTransparent] = useState(false);
@@ -36,7 +39,7 @@ export default function Studio() {
   const fileInput = useRef<HTMLInputElement>(null), sourceRef = useRef<HTMLImageElement>(null);
   const active = Math.min(paletteIndex, (design?.palette.length ?? 1) - 1);
   const undoLimit = (d: Design) => Math.max(2, Math.min(40, Math.floor(32_000_000 / d.pixels.length)));
-  const install = (d: Design) => { drag.current = null; setMotif(null); setReplaceTarget(0); setDesign(d); setActive(d.pixels[0]); setSelection(null); setHistory([]); setFuture([]); setHooks(d.width); setDirty(true); setRepeat(false); setZoom(Math.min(2, 700 / d.width)); };
+  const install = (d: Design) => { drag.current = null; setMotif(null); setMotifMapping(null); setMotifGround(-1); setReplaceTarget(0); setDesign(d); setActive(d.pixels[0]); setSelection(null); setHistory([]); setFuture([]); setHooks(d.width); setDirty(true); setRepeat(false); setZoom(Math.min(2, 700 / d.width)); };
   const commit = (next: Design, before = design) => {
     if (!before) return;
     setHistory(h => [...h, before].slice(-undoLimit(next))); setFuture([]); setDesign(next); setDirty(true);
@@ -86,6 +89,21 @@ export default function Studio() {
     }
     setFile(f); setSourceURL(URL.createObjectURL(f)); setCorners([]); setPin(false); setSourceSize([0, 0]);
     setNotice('Set the output columns and rows, then extract. TIFF/BMP may not preview in every browser.');
+  }
+  async function openMotif(file: File) {
+    try {
+      if (file.size > 20 * 1024 * 1024) throw Error('Use a motif file of at most 20 MB.');
+      const imported = fromJSON(JSON.parse(await file.text()));
+      setMotif(imported);
+      setMotifMapping(new Map());
+      setMotifGround(-1);
+      setPasteX(0);
+      setPasteY(0);
+      setError('');
+      setNotice('Motif opened. Choose destination slots for its colors before pasting.');
+    } catch (error) {
+      setError((error as Error).message);
+    }
   }
   async function extract() {
     if (!file) return;
@@ -176,19 +194,53 @@ export default function Studio() {
             <button disabled={!selection || !validRegion(selection, design.width, design.height)} onClick={() => {
               if (!selection) return;
               setMotif(crop(design, selection));
+              setMotifMapping(null);
+              setMotifGround(-1);
               setPasteX(selection.x);
               setPasteY(selection.y);
             }}>Copy selected motif</button>
+            <label>Open saved motif
+              <input type="file" accept=".json,application/json" onChange={event => {
+                const file = event.currentTarget.files?.[0];
+                if (file) void openMotif(file);
+                event.currentTarget.value = '';
+              }} />
+            </label>
             {motif && <>
+              <button onClick={() => save(JSON.stringify(serialize(motif)), 'weavecore-motif.json', 'application/json')}>
+                Save motif file
+              </button>
               <div className="field-row">
                 <NumberField label="Paste column" min={0} value={pasteX} onChange={setPasteX} />
                 <NumberField label="Paste row" min={0} value={pasteY} onChange={setPasteY} />
               </div>
-              <label className="check">
+              {motifMapping ? <>
+                <label>Motif index to leave transparent
+                  <select value={motifGround} onChange={event => setMotifGround(Number(event.target.value))}>
+                    <option value={-1}>None</option>
+                    {motifIndices.map(index => <option key={index} value={index}>{index} · {motif.names[index]}</option>)}
+                  </select>
+                </label>
+                {motifIndices.filter(index => index !== motifGround).map(index => (
+                  <label key={index}>Destination for motif index {index} · {motif.names[index]}
+                    <select value={motifMapping.get(index) ?? -1} onChange={event => {
+                      const target = Number(event.target.value);
+                      setMotifMapping(previous => new Map(previous).set(index, target));
+                    }}>
+                      <option value={-1}>Choose a destination</option>
+                      {design.names.map((name, target) => <option key={target} value={target}>{target} · {name}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </> : <label className="check">
                 <input type="checkbox" checked={transparent} onChange={event => setTransparent(event.target.checked)} />
                 Skip active palette index when pasting ({active})
-              </label>
-              <button onClick={() => operation(() => pasteMotif(design, motif, pasteX, pasteY, transparent ? active : null))}>
+              </label>}
+              <button onClick={() => operation(() => pasteMotif(
+                design, motif, pasteX, pasteY,
+                motifMapping ? motifGround : transparent ? active : null,
+                motifMapping ?? undefined,
+              ))}>
                 Paste {motif.width} × {motif.height} motif
               </button>
             </>}

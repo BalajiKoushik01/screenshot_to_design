@@ -122,15 +122,23 @@ export function repeatSource(x: number, y: number, width: number, height: number
   return sourceY * width + sourceX;
 }
 
-export function pasteMotif(design: Design, motif: Design, x: number, y: number, skip: number | null) {
+export function pasteMotif(design: Design, motif: Design, x: number, y: number, skip: number | null, mapping?: ReadonlyMap<number, number>) {
   const region = { name: 'Motif', x, y, width: motif.width, height: motif.height };
   if (!validRegion(region, design.width, design.height)) throw Error('The motif must fit inside the canvas.');
-  if (motif.pixels.some(index => index >= design.palette.length)) throw Error('A motif palette slot is missing. Copy the motif again.');
+  const destination = new Int16Array(256).fill(-1);
+  for (const index of new Set(motif.pixels)) {
+    if (index === skip) continue;
+    const target = mapping ? mapping.get(index) : index;
+    if (target === undefined || !Number.isInteger(target) || !design.palette[target]) {
+      throw Error(`Choose a destination for motif palette index ${index}.`);
+    }
+    destination[index] = target;
+  }
   const next = clone(design);
   for (let row = 0; row < motif.height; row++) {
     for (let column = 0; column < motif.width; column++) {
       const index = motif.pixels[row * motif.width + column];
-      if (index !== skip) next.pixels[(y + row) * design.width + x + column] = index;
+      if (index !== skip) next.pixels[(y + row) * design.width + x + column] = destination[index];
     }
   }
   return next;
