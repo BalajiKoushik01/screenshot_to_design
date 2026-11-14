@@ -1,4 +1,4 @@
-name: Backend syntax and frontend build
+name: Indexed studio checks
 on:
   pull_request:
   push:
@@ -13,7 +13,8 @@ jobs:
           python-version: "3.11"
       - name: Compile Python sources
         run: python -m compileall -q loom-backend/app
-      - name: Validate upload form parameters
+      - run: pip install -r loom-backend/requirements-studio.txt httpx
+      - name: Test extraction and API validation
         run: cd loom-backend && python -m unittest discover -s tests -p "test_*.py" -v
   frontend-build:
     runs-on: ubuntu-latest
@@ -28,4 +29,32 @@ jobs:
           cache: npm
           cache-dependency-path: loom-backend/frontend/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
+
+  browser-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: loom-backend/frontend/package-lock.json
+      - run: pip install -r loom-backend/requirements-studio.txt
+      - run: npm ci
+        working-directory: loom-backend/frontend
+      - run: npm run build
+        working-directory: loom-backend/frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: loom-backend/frontend
+      - run: npm run test:e2e
+        working-directory: loom-backend/frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-browser-evidence
+          path: loom-backend/frontend/test-results

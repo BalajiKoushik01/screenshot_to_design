@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from uuid import uuid4
 
+from app.api.studio import router as studio_router
 from app.core.config import Settings
 from app.api.v1.endpoints import router as v1_router
 
@@ -56,6 +57,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # -------------------------------------------------
 # Include API routes under the /api/v1 prefix
 # -------------------------------------------------
+app.include_router(studio_router, prefix="/api/studio", tags=["indexed-studio"])
 app.include_router(v1_router, prefix="/api/v1", tags=["v1"])
 
 # -------------------------------------------------
