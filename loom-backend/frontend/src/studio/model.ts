@@ -50,11 +50,15 @@ export function crop(d: Design, r: Region): Design {
   for (let y = 0; y < r.height; y++) out.pixels.set(d.pixels.subarray((y + r.y) * d.width + r.x, (y + r.y) * d.width + r.x + r.width), y * r.width);
   return out;
 }
-export function tile(d: Design, across: number, down: number): Design {
+export function tile(d: Design, across: number, down: number, mode: RepeatMode = "straight"): Design {
   if (!Number.isInteger(across) || !Number.isInteger(down) || !sizeOK(d.width * across, d.height * down)) throw Error('Repeat exceeds the four-million-pixel limit');
   const out = clone(d); out.width *= across; out.height *= down; out.regions = [];
   out.pixels = new Uint8Array(out.width * out.height);
-  for (let y = 0; y < out.height; y++) for (let x = 0; x < across; x++) out.pixels.set(d.pixels.subarray((y % d.height) * d.width, (y % d.height + 1) * d.width), y * out.width + x * d.width);
+  for (let y = 0; y < out.height; y++) {
+    for (let x = 0; x < out.width; x++) {
+      out.pixels[y * out.width + x] = d.pixels[repeatSource(x, y, d.width, d.height, mode)];
+    }
+  }
   return out;
 }
 export function flip(d: Design, horizontal: boolean): Design {
@@ -100,4 +104,50 @@ export function seams(d: Design) {
   for (let row = 0; row < d.height; row++) x += Number(d.pixels[row * d.width] !== d.pixels[row * d.width + d.width - 1]);
   for (let col = 0; col < d.width; col++) y += Number(d.pixels[col] !== d.pixels[(d.height - 1) * d.width + col]);
   return { x: x / d.height, y: y / d.width };
+}
+
+export type RepeatMode = 'straight' | 'mirror' | 'half-drop' | 'brick';
+
+export function repeatSource(x: number, y: number, width: number, height: number, mode: RepeatMode) {
+  const column = Math.floor(x / width);
+  const row = Math.floor(y / height);
+  let sourceX = x % width;
+  let sourceY = y % height;
+  if (mode === 'mirror') {
+    if (column % 2) sourceX = width - 1 - sourceX;
+    if (row % 2) sourceY = height - 1 - sourceY;
+  }
+  if (mode === 'half-drop' && column % 2) sourceY = (sourceY + Math.floor(height / 2)) % height;
+  if (mode === 'brick' && row % 2) sourceX = (sourceX + Math.floor(width / 2)) % width;
+  return sourceY * width + sourceX;
+}
+
+export function pasteMotif(design: Design, motif: Design, x: number, y: number, skip: number | null) {
+  const region = { name: 'Motif', x, y, width: motif.width, height: motif.height };
+  if (!validRegion(region, design.width, design.height)) throw Error('The motif must fit inside the canvas.');
+  if (motif.pixels.some(index => index >= design.palette.length)) throw Error('A motif palette slot is missing. Copy the motif again.');
+  const next = clone(design);
+  for (let row = 0; row < motif.height; row++) {
+    for (let column = 0; column < motif.width; column++) {
+      const index = motif.pixels[row * motif.width + column];
+      if (index !== skip) next.pixels[(y + row) * design.width + x + column] = index;
+    }
+  }
+  return next;
+}
+
+export function replaceIndex(design: Design, source: number, target: number, selection?: Region) {
+  if (!Number.isInteger(source) || !Number.isInteger(target) || !design.palette[source] || !design.palette[target]) {
+    throw Error('Select valid source and destination palette slots.');
+  }
+  const area = selection ?? { name: 'Canvas', x: 0, y: 0, width: design.width, height: design.height };
+  if (!validRegion(area, design.width, design.height)) throw Error('The selection is outside the canvas.');
+  const next = clone(design);
+  for (let y = area.y; y < area.y + area.height; y++) {
+    for (let x = area.x; x < area.x + area.width; x++) {
+      const offset = y * design.width + x;
+      if (next.pixels[offset] === source) next.pixels[offset] = target;
+    }
+  }
+  return next;
 }

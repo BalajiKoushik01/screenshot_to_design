@@ -43,3 +43,18 @@ test('editing a clone does not mutate undo snapshot', () => {
   const d = sample(), next = m.clone(d); next.pixels[0] = 2; next.palette[0][0] = 100;
   assert.equal(d.pixels[0], 0); assert.equal(d.palette[0][0], 0);
 });
+test('transparent paste skips the index rather than every matching RGB color', () => {
+  const design = sample();
+  const motif = m.crop(design, { name: 'Motif', x: 1, y: 0, width: 2, height: 1 });
+  assert.deepEqual([...m.pasteMotif(design, motif, 0, 0, 1).pixels], [0, 2, 2, 2, 1, 0]);
+  assert.throws(() => m.pasteMotif(design, motif, 2, 0, null));
+});
+test('scoped replacement affects neither other indices nor pixels outside the selection', () => {
+  const selection = { name: 'Body', x: 1, y: 0, width: 2, height: 1 };
+  assert.deepEqual([...m.replaceIndex(sample(), 1, 0, selection).pixels], [0, 0, 2, 2, 1, 0]);
+});
+test('mirror, half-drop and brick translate palette indices by tile parity', () => {
+  assert.deepEqual([...m.tile(sample(), 2, 1, 'mirror').pixels], [0, 1, 2, 2, 1, 0, 2, 1, 0, 0, 1, 2]);
+  assert.deepEqual([...m.tile(sample(), 2, 1, 'half-drop').pixels], [0, 1, 2, 2, 1, 0, 2, 1, 0, 0, 1, 2]);
+  assert.deepEqual([...m.tile(sample(), 1, 2, 'brick').pixels], [0, 1, 2, 2, 1, 0, 1, 2, 0, 1, 0, 2]);
+});

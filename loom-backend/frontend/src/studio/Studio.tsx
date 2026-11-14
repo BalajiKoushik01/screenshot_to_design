@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { bmp, clone, crop, Design, fill, flip, fromJSON, Region, RGB, seams, serialize, sizeOK, stroke, tile, validRegion } from './model';
+import { bmp, clone, crop, Design, fill, flip, fromJSON, pasteMotif, Region, RepeatMode, repeatSource, replaceIndex, RGB, seams, serialize, sizeOK, stroke, tile, validRegion } from './model';
 import './studio.css';
 
 type Tool = 'pencil' | 'fill' | 'pick' | 'select';
@@ -20,6 +20,12 @@ export default function Studio() {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [tool, setTool] = useState<Tool>('pencil'), [paletteIndex, setActive] = useState(0), [brush, setBrush] = useState(1);
   const [zoom, setZoom] = useState(1), [grid, setGrid] = useState(true), [repeat, setRepeat] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('straight');
+  const [motif, setMotif] = useState<Design | null>(null);
+  const [pasteX, setPasteX] = useState(0);
+  const [pasteY, setPasteY] = useState(0);
+  const [transparent, setTransparent] = useState(false);
+  const [replaceTarget, setReplaceTarget] = useState(0);
   const [showAllColors, setShowAllColors] = useState(false);
   const [selection, setSelection] = useState<Region | null>(null), [regionName, setRegionName] = useState('Body');
   const [across, setAcross] = useState(2), [down, setDown] = useState(2), [hooks, setHooks] = useState(0);
@@ -30,7 +36,7 @@ export default function Studio() {
   const fileInput = useRef<HTMLInputElement>(null), sourceRef = useRef<HTMLImageElement>(null);
   const active = Math.min(paletteIndex, (design?.palette.length ?? 1) - 1);
   const undoLimit = (d: Design) => Math.max(2, Math.min(40, Math.floor(32_000_000 / d.pixels.length)));
-  const install = (d: Design) => { drag.current = null; setDesign(d); setActive(d.pixels[0]); setSelection(null); setHistory([]); setFuture([]); setHooks(d.width); setDirty(true); setRepeat(false); setZoom(Math.min(2, 700 / d.width)); };
+  const install = (d: Design) => { drag.current = null; setMotif(null); setReplaceTarget(0); setDesign(d); setActive(d.pixels[0]); setSelection(null); setHistory([]); setFuture([]); setHooks(d.width); setDirty(true); setRepeat(false); setZoom(Math.min(2, 700 / d.width)); };
   const commit = (next: Design, before = design) => {
     if (!before) return;
     setHistory(h => [...h, before].slice(-undoLimit(next))); setFuture([]); setDesign(next); setDirty(true);
@@ -50,11 +56,27 @@ export default function Studio() {
     if (!design || !canvas.current) return;
     render(design, canvas.current);
     if (repeat && preview.current) {
-      const p = preview.current; const tw = Math.min(design.width, 350), th = Math.max(1, Math.round(design.height * tw / design.width));
-      p.width = tw * 3; p.height = Math.min(th * 3, 2100); const ctx = p.getContext('2d')!; ctx.imageSmoothingEnabled = false;
-      for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) ctx.drawImage(canvas.current, x * tw, y * th, tw, th);
+      const p = preview.current;
+      const scale = Math.min(1, 350 / design.width, 700 / design.height);
+      const tileWidth = Math.max(1, Math.round(design.width * scale));
+      const tileHeight = Math.max(1, Math.round(design.height * scale));
+      p.width = tileWidth * 3;
+      p.height = tileHeight * 3;
+      const ctx = p.getContext('2d')!;
+      const data = ctx.createImageData(p.width, p.height);
+      for (let y = 0; y < p.height; y++) {
+        for (let x = 0; x < p.width; x++) {
+          const cellX = Math.floor(x * design.width / tileWidth);
+          const cellY = Math.floor(y * design.height / tileHeight);
+          const index = design.pixels[repeatSource(cellX, cellY, design.width, design.height, repeatMode)];
+          const offset = (y * p.width + x) * 4;
+          data.data.set(design.palette[index], offset);
+          data.data[offset + 3] = 255;
+        }
+      }
+      ctx.putImageData(data, 0, 0);
     }
-  }, [design, repeat]);
+  }, [design, repeat, repeatMode]);
   async function choose(f: File) {
     setError(''); setNotice('');
     if (f.size > 20 * 1024 * 1024) { setError('Use a file of at most 20 MB.'); return; }
@@ -110,7 +132,7 @@ export default function Studio() {
   const counts = useMemo(() => { const values = new Uint32Array(design?.palette.length || 1); design?.pixels.forEach(i => values[i]++); return values; }, [design]);
   return <div className="studio">
     <header className="studio-header"><a href="/" className="studio-brand"><span className="weave-mark">▦</span><span>WeaveCore<small>INDEXED DESIGN STUDIO</small></span></a><span className="studio-tag">From reference to editable pixels</span><button onClick={() => fileInput.current?.click()}>Open image / project</button><input ref={fileInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.json" onChange={e => { if (e.target.files?.[0]) void choose(e.target.files[0]); e.target.value = ''; }} /></header>
-    <div className="studio-banner"><strong>01 Extract</strong><span>→</span><strong>02 Refine</strong><span>→</span><strong>03 Export</strong><p>One cell, one palette index. Your design stays editable.</p><a href="?legacy=1">Research workspace ↗</a></div>
+    <div className="studio-banner"><a href="?legacy=1">Research workspace ↗</a></div>
     {(error || notice) && <div className={error ? 'studio-message error' : 'studio-message'} role={error ? 'alert' : 'status'}>{error || notice}</div>}
     <main className="studio-layout">
       <aside className="studio-left">
@@ -141,7 +163,45 @@ export default function Studio() {
         {design ? <><section><h2>Panels & repeats</h2><p className="muted">Drag with Select panel to isolate a body, border, pallu or motif. Rectangles stay editable in the project.</p><label>Panel name<input value={regionName} maxLength={80} onChange={e => setRegionName(e.target.value)} /></label>
           {selection && <><div className="field-row"><NumberField label="X" min={0} value={selection.x} onChange={v => setSelection({ ...selection, x: v })} /><NumberField label="Y" min={0} value={selection.y} onChange={v => setSelection({ ...selection, y: v })} /></div><div className="field-row"><NumberField label="Width" value={selection.width} onChange={v => setSelection({ ...selection, width: v })} /><NumberField label="Height" value={selection.height} onChange={v => setSelection({ ...selection, height: v })} /></div><div className="button-row"><button onClick={() => { if (!validRegion(selection, design.width, design.height) || design.regions.length >= 100) { setError('Invalid selection or panel limit reached.'); return; } const n = clone(design); n.regions.push({ ...selection, name: regionName }); commit(n); }}>Save panel</button><button onClick={() => operation(() => crop(design, selection))}>Crop to panel</button></div></>}
           {design.regions.map((r, i) => <div className="region-row" key={i}><button onClick={() => { setSelection(r); setRegionName(r.name); }}>{r.name} <small>{r.width} × {r.height}</small></button><button aria-label={`Delete ${r.name}`} onClick={() => { const n = clone(design); n.regions.splice(i, 1); commit(n); }}>×</button></div>)}
-          <div className="button-row"><button onClick={() => operation(() => flip(design, true))}>Mirror ↔</button><button onClick={() => operation(() => flip(design, false))}>Mirror ↕</button></div><div className="field-row"><NumberField label="Across" max={64} value={across} onChange={setAcross} /><NumberField label="Down" max={64} value={down} onChange={setDown} /></div><button onClick={() => operation(() => tile(design, across, down))}>Build repeats</button><p className="muted">Crop to a clean repeat first. Mirroring and tiling happen only when you request them.</p></section>
+          <div className="button-row"><button onClick={() => operation(() => flip(design, true))}>Mirror ↔</button><button onClick={() => operation(() => flip(design, false))}>Mirror ↕</button></div><div className="field-row"><NumberField label="Across" max={64} value={across} onChange={setAcross} /><NumberField label="Down" max={64} value={down} onChange={setDown} /></div><label>Repeat layout
+            <select value={repeatMode} onChange={event => setRepeatMode(event.target.value as RepeatMode)}>
+              <option value="straight">Straight</option>
+              <option value="mirror">Alternating mirror</option>
+              <option value="half-drop">Half-drop columns</option>
+              <option value="brick">Half-brick rows</option>
+            </select>
+          </label><button onClick={() => operation(() => tile(design, across, down, repeatMode))}>Build repeats</button><p className="muted">Crop to a clean repeat first. Mirroring and tiling happen only when you request them.</p></section>
+          <section>
+            <h2>Motif and palette edits</h2>
+            <button disabled={!selection || !validRegion(selection, design.width, design.height)} onClick={() => {
+              if (!selection) return;
+              setMotif(crop(design, selection));
+              setPasteX(selection.x);
+              setPasteY(selection.y);
+            }}>Copy selected motif</button>
+            {motif && <>
+              <div className="field-row">
+                <NumberField label="Paste column" min={0} value={pasteX} onChange={setPasteX} />
+                <NumberField label="Paste row" min={0} value={pasteY} onChange={setPasteY} />
+              </div>
+              <label className="check">
+                <input type="checkbox" checked={transparent} onChange={event => setTransparent(event.target.checked)} />
+                Skip active palette index when pasting ({active})
+              </label>
+              <button onClick={() => operation(() => pasteMotif(design, motif, pasteX, pasteY, transparent ? active : null))}>
+                Paste {motif.width} × {motif.height} motif
+              </button>
+            </>}
+            <label>Replace active index {active} with
+              <select value={Math.min(replaceTarget, design.palette.length - 1)} onChange={event => setReplaceTarget(Number(event.target.value))}>
+                {design.names.map((name, index) => <option key={index} value={index}>{index} · {name}</option>)}
+              </select>
+            </label>
+            <button disabled={active === Math.min(replaceTarget, design.palette.length - 1)}
+              onClick={() => operation(() => replaceIndex(design, active, Math.min(replaceTarget, design.palette.length - 1), selection ?? undefined))}>
+              Replace index in {selection ? 'selection' : 'canvas'}
+            </button>
+          </section>
           <section><h2>Extraction evidence</h2><dl><dt>Sampled RGB preserved</dt><dd>{design.report.exact_sampled_rgb === null ? 'Not measured' : design.report.exact_sampled_rgb ? 'Yes, at extraction' : 'No — colors reduced'}</dd><dt>Mean RGB error at extraction</dt><dd>{design.report.rgb_mae === null ? 'Not measured' : design.report.rgb_mae.toFixed(2) + ' / 255'}</dd></dl><p className="muted">Compared with sampled input, before manual edits. This does not measure recovery of the original loom design.</p>{design.report.notes.map((note, i) => <p className="report-note" key={i}>{note}</p>)}</section>
           <section><h2>Save & export</h2><NumberField label="Required export width (0 = any)" min={0} value={hooks} onChange={setHooks} /><p className="muted">No resizing or palette remapping during export. Assign weave structures and verify controller compatibility in your factory workflow.</p><button className="primary" onClick={() => exportBMP()}>Export indexed BMP</button><button onClick={() => { save(JSON.stringify(serialize(design)), 'weavecore-project.json', 'application/json'); setDirty(false); setNotice('Editable project saved. Keep this file to resume your work.'); }}>Save editable project{dirty ? ' •' : ''}</button><button onClick={() => { const d = document.createElement('canvas'); render(design, d); d.toBlob(b => { if (b) save(b, 'weavecore-preview.png', 'image/png'); }); }}>Export PNG preview</button><button disabled={!selection} onClick={() => { if (selection) { try { const d = crop(design, selection); save(bmp(d) as BlobPart, 'weavecore-panel.bmp', 'image/bmp'); } catch (e) { setError((e as Error).message); } } }}>Export selected panel BMP</button></section>
         </> : <section><h2>A faithful starting point</h2><ol><li>Choose a source and set the intended grid dimensions.</li><li>Preserve exact colors for CAD screenshots, or explicitly reduce a photo’s colors.</li><li>Correct cells, name palette slots and inspect repeats.</li><li>Save the editable project and export an indexed BMP.</li></ol><p className="muted">Extraction runs on this app’s server. Editing and project/BMP exports run in your browser. This studio does not retain uploaded images.</p></section>}
