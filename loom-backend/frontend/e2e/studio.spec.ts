@@ -7,7 +7,7 @@ test('extract, edit, undo, save, reopen, and export without losing palette indic
   const exceptions: string[] = [];
   page.on('pageerror', e => exceptions.push(e.message));
   await page.goto('/');
-  await page.locator('input[type=file]').setInputFiles(sample);
+  await page.getByRole('banner').locator('input[type=file]').setInputFiles(sample);
   await expect(page.getByLabel('Output columns')).toHaveValue('240');
   await expect(page.getByLabel('Output rows')).toHaveValue('1536');
   await page.getByRole('button', { name: 'Extract editable design', exact: true }).click();
@@ -35,7 +35,7 @@ test('extract, edit, undo, save, reopen, and export without losing palette indic
   expect(restored.data.indices).toBe(before.data.indices);
   expect(restored.data.palette).toEqual(before.data.palette);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
-  await page.locator('input[type=file]').setInputFiles(before.file);
+  await page.getByRole('banner').locator('input[type=file]').setInputFiles(before.file);
   await expect(page.getByRole('status')).toContainText('Project opened');
   const bmpDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export indexed BMP', exact: true }).click();
