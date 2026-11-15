@@ -39,3 +39,15 @@ Save the editable JSON project to resume with the same palette, pixels, named re
 Set the required full-design export width, or zero for no width restriction. Export blocks mismatches rather than stretching artwork. BMP export uses a 256-entry RGB palette, eight bits per pixel, uncompressed bottom-up rows and four-byte row alignment. It does not infer or add binder dots.
 
 Open the BMP in the factory's CAD system, assign/verify weave structures, confirm hook/pick orientation, selvage and controller format, then follow the factory's sampling process. Float analysis needs a woven interlacement draft; a flat region of a color-area design is not automatically a physical float.
+
+## Reuse a motif or replace palette indices
+
+Select a rectangle, then choose **Copy selected motif**. Set the destination column and row, starting at zero. To keep the destination ground, select the source ground swatch and enable **Skip active palette index when pasting**. The pasted motif must fit inside the canvas.
+
+To replace pixels without changing the palette table, choose the source swatch and a destination slot under **Motif and palette edits**. The replacement is confined to the active rectangular selection when present. Paste and replacement can be undone.
+
+Choose the repeat layout under **Panels & repeats**. The preview and built artwork use the same straight, mirrored, half-drop or half-brick arrangement. Half offsets round down when the tile dimension is odd.
+
+See the [designer workflow audit](DESIGNER_WORKFLOW_AUDIT.md) for requirements and outstanding gaps.
+
+To reuse a motif across projects, copy a selection and choose **Save motif file**. In the destination project, choose **Open saved motif**, set the coordinates, and map each used source index to a destination slot. Choose an optional transparent source index to retain the destination beneath it. Mapping is explicit even when two palette entries have identical colors.
